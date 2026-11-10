@@ -1,0 +1,36 @@
+.tools/
+target/
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+*.pem
+*.key
+.DS_Store
+.idea/
+.vscode/
+.kube/
+*.kubeconfig
+
+/.secrets/
+
+# StormOps local-only files
+.secrets/
+.phase*-backup-*/
+stormops-phase*-inspection.txt
+**/target/
+**/node_modules/
+**/dist/
+**/coverage/
+**/test-results/
+**/.DS_Store
+*.sqlite
+*.sqlite3
+*.db
+
+# Local development backups
+backend/pom.xml.before-flyway-fix

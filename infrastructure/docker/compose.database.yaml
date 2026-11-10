@@ -1,0 +1,23 @@
+# Dedicated database: no shared container, network, volume or host port.
+name: stormops-database
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: stormops-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: stormops
+      POSTGRES_USER: stormops
+      POSTGRES_PASSWORD: ${STORMOPS_DB_PASSWORD:?Set STORMOPS_DB_PASSWORD}
+    ports:
+      - "127.0.0.1:15432:5432"
+    volumes:
+      - stormops_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stormops -d stormops"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 384m
+volumes:
+  stormops_pgdata:
