@@ -158,3 +158,13 @@ Real screenshots from the local StormOps development environment. The applicatio
 
 > **Security and operations:** The viewer screenshot illustrates UI-level restrictions; authorization is enforced separately by the backend. Grafana availability depends on the local monitoring stack. See [Security](docs/SECURITY.md), [Testing](docs/TESTING.md), and [Known limitations](docs/KNOWN_LIMITATIONS.md).
 <!-- STORMOPS_SCREENSHOTS_END -->
+
+<!-- STORMOPS_GRAFANA_START -->
+### Live observability — Grafana and Prometheus
+
+Real monitoring of the local StormOps Kubernetes demo service, including service availability, HTTP request throughput, JVM heap memory, and HTTP 5xx error rate.
+
+![StormOps Grafana resilience overview](docs/assets/screenshots/grafana-monitoring.png)
+
+> Local lab screenshot; monitoring access requires the local Kubernetes cluster and port-forwarding.
+<!-- STORMOPS_GRAFANA_END -->
