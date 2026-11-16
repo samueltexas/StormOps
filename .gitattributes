@@ -1,2 +1,6 @@
 # Exclude the legacy frontend installation script from language statistics.
 scripts/install-phase6-frontend.sh linguist-detectable=false
+
+# Exclude local environment provisioning scripts.
+scripts/setup-demo-service.sh linguist-detectable=false
+scripts/setup-monitoring.sh linguist-detectable=false
