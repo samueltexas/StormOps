@@ -1,0 +1,2 @@
+# Exclude the legacy frontend installation script from language statistics.
+scripts/install-phase6-frontend.sh linguist-detectable=false
