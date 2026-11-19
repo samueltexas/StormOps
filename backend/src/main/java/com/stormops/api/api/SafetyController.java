@@ -21,6 +21,16 @@ public class SafetyController {
     @PostMapping("/resume") public Map<String,Object> resume(@RequestHeader("X-StormOps-Confirmation") String confirmation) {
         return change(false, confirmation);
     }
+    @ExceptionHandler(ResponseStatusException.class)
+    public org.springframework.http.ResponseEntity<Map<String, String>> handleStatus(
+            ResponseStatusException exception) {
+        // Resolve the expected error inside MVC to preserve the precise status
+        // without an /error dispatch that could be denied by the security filter.
+        return org.springframework.http.ResponseEntity.status(exception.getStatusCode())
+                .body(Map.of("error", exception.getReason() == null
+                        ? "Safety operation rejected" : exception.getReason()));
+    }
+
     private Map<String,Object> change(boolean stopped, String confirmation) {
         if (!(stopped ? "STOP_STORMOPS" : "RESUME_STORMOPS").equals(confirmation)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Explicit confirmation is required");
         try { safety.stop(stopped, ExperimentService.actor()); }

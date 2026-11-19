@@ -193,6 +193,28 @@ class StormOpsIntegrationIT {
         }
     }
 
+    @Test void adminResumeRejectsActiveRunWithConflictAndPreservesReservation() throws Exception {
+        safety.stop(false, "integration");
+        UUID id = UUID.randomUUID();
+        try {
+            safety.begin(id, "integration", "POD_TERMINATION", false);
+            var rejected = request("POST", "/api/v1/safety/resume",
+                    "admin", "stormops-integration-admin-only", "RESUME_STORMOPS", null);
+            assertEquals(409, rejected.statusCode());
+            assertTrue(rejected.body().contains("Experiment requires completion"));
+            assertEquals(id, safety.state().get("active_run"));
+            assertEquals(false, safety.state().get("stopped"));
+
+            var invalid = request("POST", "/api/v1/safety/resume",
+                    "admin", "stormops-integration-admin-only", "INVALID", null);
+            assertEquals(400, invalid.statusCode());
+            assertEquals(id, safety.state().get("active_run"));
+        } finally {
+            // Only the disposable Testcontainers database is affected.
+            jdbc.update("UPDATE safety_control SET active_run = NULL, stopped = TRUE WHERE id = 1");
+        }
+    }
+
     @Test void analyticsAndReliabilityReturnValidReports() throws Exception {
         var analytics = request("GET", "/api/v1/analytics/summary", "viewer", "stormops-integration-viewer-only", null, null);
         assertEquals(200, analytics.statusCode());

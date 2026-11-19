@@ -80,17 +80,33 @@ force-unlock endpoint, automatic lease expiry or automatic incident repair.
       only its own database container.
 - [x] Verify that no second experiment is admitted during the outage and that the
       active run, synthetic injection intent and safety stop survive restoration.
-- [ ] Validate on Java 21 and 25 in GitHub Actions and locally.
-- [ ] Review this increment before integrating into main.
+- [x] Validate on Java 21 and 25 in GitHub Actions and locally.
+- [x] Review this increment and integrate PR #4.
 
 Docker pause represents database process unavailability, not a pure TCP network
 partition. This test uses no existing StormOps database, container or Kubernetes
 resource. The synthetic intent does not indicate an actual injected fault.
 
+### Increment 3.3 — Isolated API process crash and restart
+
+- [x] Add a real Spring Boot JVM crash/restart test using exclusively owned
+      Java child processes and a disposable PostgreSQL container.
+- [x] Seed synthetic INJECTION_INTENT after the first API starts; do not execute
+      any Kubernetes fault or use ambient Kubernetes credentials.
+- [x] Assert that the restarted API retains the reservation, rejects another
+      injection and a premature resume, and preserves the audit trail.
+- [ ] Verify Java 21 and Java 25 CI and local execution.
+- [ ] Review evidence and integrate the incremental pull request.
+
+The test forcibly terminates **only the Java child process it created**, not
+the local StormOps API. Its database, credentials and loopback port belong
+only to Testcontainers and the test process. A nonexistent kubeconfig is passed
+to both child processes. This test demonstrates crash-safe admission blocking,
+not successful remediation of an injected fault.
+
 ### Remaining Milestone 3 work
 
 - [ ] Add disposable network-partition tests with safe cleanup.
-- [ ] Add crash tests using independently owned test API processes.
 - [ ] Verify backup and restore of experiment history, safety state and audit sequence
       in isolated containers.
 - [ ] Provide non-secret, reproducible evidence and restoration runbooks.
