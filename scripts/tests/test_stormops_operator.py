@@ -109,11 +109,11 @@ class SafetyTests(unittest.TestCase):
 
     def test_rbac_reply_distinguishes_denials_from_command_errors(self):
         cases = (
-            (0, "yes\\n", "", True),
-            (1, "no\\n", "", False),
+            (0, "yes\n", "", True),
+            (1, "no\n", "", False),
             (1, "", "Forbidden", None),
-            (1, "no\\n", "TLS verification failed", None),
-            (0, "no\\n", "", None),
+            (1, "no\n", "TLS verification failed", None),
+            (0, "no\n", "", None),
         )
         for returncode, stdout, stderr, expected in cases:
             with self.subTest(returncode=returncode, stdout=stdout, stderr=stderr):
@@ -157,14 +157,14 @@ class SafetyTests(unittest.TestCase):
                 file.write_text("synthetic kubeconfig")
                 file.chmod(0o600)
             inspector.security_file.write_text(
-                "STORMOPS_SECURITY_ENABLED=true\\n"
-                "STORMOPS_ADMIN_PASSWORD=example\\n"
-                "STORMOPS_VIEWER_PASSWORD=example\\n"
+                "STORMOPS_SECURITY_ENABLED=true\n"
+                "STORMOPS_ADMIN_PASSWORD=example\n"
+                "STORMOPS_VIEWER_PASSWORD=example\n"
             )
-            inspector.database_file.write_text("STORMOPS_DB_PASSWORD=example\\n")
+            inspector.database_file.write_text("STORMOPS_DB_PASSWORD=example\n")
             for file in (inspector.security_file, inspector.database_file):
                 file.chmod(0o600)
-            (inspector.root / "scripts/run-api-phase10d.sh").write_text("#!/bin/bash\\n")
+            (inspector.root / "scripts/run-api-phase10d.sh").write_text("#!/bin/bash\n")
             identity = json.dumps({"status": {"userInfo": {
                 "username": "system:serviceaccount:stormops-lab:stormops-runner"
             }}})
