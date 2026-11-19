@@ -21,6 +21,30 @@ The tests use synthetic experiment identities for the recovery scenarios.
 An `INJECTION_INTENT` event means an operation may have been attempted; it
 does not prove a fault happened or that the workload recovered.
 
+## Verified Milestone 3 evidence (November 19, 2026)
+
+The work was integrated as five independently reviewed pull requests:
+
+| Increment | Pull request | Verified scope |
+| --- | --- | --- |
+| 3.1 | [PR #3](https://github.com/samueltexas/StormOps/pull/3) | Failure-mode mock regressions and persisted intent |
+| 3.2 | [PR #4](https://github.com/samueltexas/StormOps/pull/4) | Disposable PostgreSQL unavailability |
+| 3.3 | [PR #5](https://github.com/samueltexas/StormOps/pull/5) | Isolated API process crash and restart |
+| 3.4 | [PR #6](https://github.com/samueltexas/StormOps/pull/6) | PostgreSQL logical backup and restore |
+| 3.5 | [PR #7](https://github.com/samueltexas/StormOps/pull/7) | TCP partition, retained intent and recovery runbook |
+
+Final incremental validation: **33 Java unit tests, 15 Java integration tests**
+passed on the developer's Mac; the post-merge operator suite passed
+**15 Python tests**. The final feature PR completed **14 successful GitHub
+Actions checks**, with **four tag-only release checks skipped**, and no
+failed or pending checks. Java 21 and 25 were covered by the CI integration
+matrix, along with frontend builds and the disposable-kind E2E.
+
+These counts document one reviewed baseline, not a permanent guarantee for
+future commits. The linked pull requests and CI logs are the traceable record.
+The existing kind E2E intentionally performs one fault in a separately owned
+test cluster; no disaster-recovery test targets a production cluster.
+
 ## Reproduce the non-destructive regression suite
 
 Run from the repository root in the **Mac Terminal**, with Docker Desktop active:

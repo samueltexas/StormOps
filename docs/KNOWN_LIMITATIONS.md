@@ -14,8 +14,20 @@ StormOps intentionally prioritizes an isolated local learning environment and cl
 | Auditability | Intent persists; crash outcome can remain unknown | Transactional/outbox-style audit strategy |
 | Fault catalog | Pod termination and HTTP simulation | Carefully scoped additional experiments |
 | Reliability | Local recovery observation | More robust telemetry and SLO evaluation |
-| Testing | Unit, integration, frontend, and CI checks | Browser E2E, security and resilience testing |
+| Testing | Unit, Testcontainers failure/recovery, frontend, CI and disposable kind E2E checks | Browser E2E, independent security testing and multi-host recovery validation |
 | Operations | Developer-managed local setup | Reproducible packaging, health checks, runbooks |
+
+## V3 Milestone 3 coverage boundary
+
+V3 Milestone 3 added isolated regression coverage for database admission
+failures, Prometheus failures, runner credential faults, API process crashes,
+PostgreSQL process unavailability, backup/restore and simulated TCP partitions.
+An interrupted experiment still requires a reviewed offline reconciliation
+process; these tests do not demonstrate automatic repair or live-cluster
+disaster recovery.
+
+See the [failure matrix](V3_OPERATIONAL_FAILURE_TESTING.md) and
+[recovery evidence inventory](V3_RECOVERY_EVIDENCE.md).
 
 ## Prioritized roadmap
 

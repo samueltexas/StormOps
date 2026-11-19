@@ -16,7 +16,7 @@ the fault occurred or that the workload recovered.
 
 ## Test boundary
 
-The initial regression increment is **non-destructive**:
+The V3 failure-mode regression suite is **non-destructive**:
 
 - OperationalFailureTest uses Mockito; it never connects to Kubernetes or a real Prometheus server.
 - StormOpsIntegrationIT uses disposable PostgreSQL via Testcontainers. Its synthetic
@@ -40,7 +40,7 @@ PostgreSQL volume. Do not run an API-kill test against a live experiment.
 | API process lost with outstanding INJECTION_INTENT | Active UUID survives repository reinitialization; new admission and resume are blocked; intent audit persists | Testcontainers integration |
 | PostgreSQL paused after admission | A new admission fails while unavailable; persisted intent and active reservation survive restoration; resume remains blocked | Disposable PostgreSQL/Testcontainers outage integration |
 | Backup/restore of audit and experiment history | Restore must preserve completed history, active run ownership, stopped state, audit rows and sequence continuity | Disposable PostgreSQL backup/restore integration test |
-| Database network partition during a reserved run | A healthy database remains unreachable through the client path; attempted admission fails, and a recovered connection still refuses reinjection/resume | Toxiproxy + disposable PostgreSQL integration (pending validation) |
+| Database network partition during a reserved run | A healthy database remains unreachable through the client path; attempted admission fails, and a recovered connection still refuses reinjection/resume | Verified Toxiproxy + disposable PostgreSQL integration test |
 
 ## Recovery decision
 
@@ -129,8 +129,8 @@ any existing Docker volume, API service or Kubernetes object.
 - [x] Verify connection restoration does not clear the active run, invent a
       terminal result or enable a new injection/resume.
 - [x] Add a non-secret evidence inventory and manual decision runbook.
-- [ ] Confirm Java 21/25 CI and local integration tests.
-- [ ] Review the evidence and integrate the PR.
+- [x] Confirm Java 21/25 CI and local integration tests.
+- [x] Review the evidence and integrate PR #7.
 
 This test simulates a TCP partition between an application client and an
 exclusively test-owned PostgreSQL instance. It does not alter local Docker
@@ -138,12 +138,30 @@ networks, firewall settings, kubeconfig, pods or the established database.
 
 See [V3 recovery evidence and limitations](V3_RECOVERY_EVIDENCE.md).
 
-### Remaining Milestone 3 work
+### Milestone 3 acceptance review
 
-- [ ] Verify the full CI matrix and local execution for Increment 3.5.
-- [ ] Reconcile the milestone's evidence and limitations with the README.
-- [ ] Review whether more realistic end-to-end outage conditions are required
-      before claiming the milestone complete.
+- [x] Validate all five incremental pull requests (#3–#7) before integration.
+- [x] Confirm the final test increment on the local Mac: 33 Java unit tests,
+      15 integration tests, plus 15 Python operator tests after main sync.
+- [x] Confirm the final PR CI: 14 successful checks, zero failures or pending
+      checks; four tag-only publication checks intentionally skipped.
+- [x] Cross-reference the observed coverage and remaining limits in the
+      README, testing guide and recovery evidence runbook.
+- [x] Review the scope of completed tests against still-unverified recovery
+      scenarios. The milestone is complete **for its isolated local-first scope**.
+
+### Residual engineering work beyond Milestone 3
+
+The tests do **not** prove correctness under every network partition or worker
+crash. In particular, a real Kubernetes operation interrupted after execution
+may still have an unknown outcome and require offline reconciliation. End-to-end
+database outage with a live fault worker, concurrent multi-host execution,
+recovery-point and recovery-time objectives, and production-grade recovery
+are not verified.
+
+These remain possible future engineering work, not Milestone 3 completion
+claims. See [recovery evidence and limits](V3_RECOVERY_EVIDENCE.md) and
+[known limitations](KNOWN_LIMITATIONS.md).
 
 **Non-goals:** production disaster recovery certification, restoring live
 local volumes during development, changing the frontend visual design,

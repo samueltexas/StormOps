@@ -77,6 +77,18 @@ modified by the new tests.
 
 Run `./mvnw --offline --batch-mode --no-transfer-progress -Pintegration-tests verify` from `backend` when dependencies are cached. Testcontainers uses a disposable PostgreSQL database and never the local StormOps database. Unit tests mock external fault operations. Coverage includes concurrent admission, retained reservations after failed completion, fresh telemetry, fixed pod eligibility, dry-run, stop checks and default HTTP authentication. No Kubernetes experiment is run by this suite.
 
+## V3 Milestone 3 regression baseline
+
+On November 19, 2026, the reviewed final increment passed **33 Java unit**
+and **15 Java integration** tests locally, followed by 15 Python operator
+tests on the merged `main`. The final increment also passed 14 GitHub
+Actions checks, with four tag-only checks skipped. The API crash, PostgreSQL
+unavailability, restore and TCP partition scenarios are tested in
+disposable resources; they are not a production recovery guarantee.
+
+See [operational failure acceptance](V3_OPERATIONAL_FAILURE_TESTING.md) and
+[recovery evidence and limits](V3_RECOVERY_EVIDENCE.md).
+
 ## V3 evidence and network-partition regression
 
 The integration profile now also tests PostgreSQL TCP availability with an isolated
