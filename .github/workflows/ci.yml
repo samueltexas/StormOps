@@ -163,7 +163,7 @@ jobs:
       - name: Validate version tag
         env:
           VERSION: ${{ github.ref_name }}
-        run: '[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]'
+        run: python3 scripts/ci/validate_release.py "$VERSION"
       - uses: docker/build-push-action@v6
         id: api
         with:
@@ -208,17 +208,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat > release-notes.md <<EOF
-          StormOps $VERSION
+          cp "docs/releases/$VERSION.md" release-notes.md
+          cat >> release-notes.md <<EOF
 
-          Java 21-compatible images, verified on JDK 21 and 25.
-          The gated kind test verifies a real pod termination, recovery and persistent audit using a restricted ServiceAccount.
+          ## Published image digests
 
           - API: ghcr.io/samueltexas/stormops-api@$API_DIGEST
           - Demo: ghcr.io/samueltexas/stormops-demo@$DEMO_DIGEST
-
-          Licensed under MIT. Copyright (c) 2026 Samuel Texa.
-          This release does not deploy or enable live experiments. Read docs/CI_DELIVERY.md and docs/V2_SAFETY.md before operation.
           EOF
           # A rerun preserves an existing release instead of overwriting its notes.
           if gh release view "$VERSION" --repo "$REPOSITORY" >/dev/null 2>&1; then

@@ -2,7 +2,7 @@
 
 ## Design and implementation sequence
 
-The v1 baseline had opt-in authentication, process-local locking and result-only persistence. A crash after injection could lose the result and permit another experiment. v2 adds secure startup, durable admission and intent auditing, bounded health checks, and explicit operator recovery. The backend version is `2.0.0-SNAPSHOT`; this is not a published release.
+The v1 baseline had opt-in authentication, process-local locking and result-only persistence. A crash after injection could lose the result and permit another experiment. v2 adds secure startup, durable admission and intent auditing, bounded health checks, and explicit operator recovery. The backend and demo service use release version `2.0.0`. See [release notes](releases/v2.0.0.md) for scope and upgrade requirements.
 
 1. Secure defaults and MIT licensing.
 2. PostgreSQL reservation, atomic completion and audit trail.

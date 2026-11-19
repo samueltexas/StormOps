@@ -98,7 +98,7 @@ Request/response payloads, confirmation headers and access requirements should b
 - The Kubernetes adapter fixes the context (`kind-stormops-local`), namespace (`stormops-lab`), deployment (`stormops-demo`) and selector (`app=stormops-demo`); callers cannot supply arbitrary shell commands or workload names.
 - The adapter uses a dedicated kubeconfig at `~/Projects/StormOps/.kube/stormops-config` and `ProcessBuilder` rather than a shell. Individual Kubernetes subprocesses have a **12-second timeout**.
 - A local `ReentrantLock` prevents overlapping experiments **within one API process**. It is **not a distributed lock**.
-- The API configuration binds to `127.0.0.1` by default. Local authentication can be enabled via environment configuration; the default `stormops.security.enabled=false` is **not suitable for an exposed deployment**.
+- The API configuration binds to `127.0.0.1` by default. Authentication is enabled by default; missing credentials prevent startup. Disabling it requires both the explicit `dev` profile and `STORMOPS_SECURITY_ENABLED=false`.
 - Credentials and kubeconfig files must remain outside Git; no real credentials should appear in documentation or examples.
 
 ## Persistence and consistency limitations

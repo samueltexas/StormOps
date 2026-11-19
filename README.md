@@ -172,3 +172,7 @@ Real monitoring of the local StormOps Kubernetes demo service, including service
 ## v2 verification and delivery
 
 Java 21 bytecode is explicit and CI tests JDK 21 and 25. A disposable kind E2E job verifies restricted ServiceAccount permissions, performs one real pod termination through the authenticated API, and checks replacement, steady state and durable audit. Version-tag publishing to GHCR is gated on the complete suite; it never deploys automatically. See [CI and container delivery](docs/CI_DELIVERY.md) for credential provisioning, evidence and release steps. Workflow configuration alone does not mean images have already been published.
+
+## Release v2.0.0
+
+The API and demo service are versioned **2.0.0**, targeting Java 21 with Java 21/25 CI coverage. Read the [release notes](docs/releases/v2.0.0.md) for changes, upgrade requirements and operational limits. The [release page](https://github.com/samueltexas/StormOps/releases/tag/v2.0.0) records published image digests after all gates pass.
