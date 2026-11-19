@@ -32,7 +32,7 @@ From the repository root, with Docker Desktop available for integration tests:
 cd "$HOME/Projects/StormOps"
 cd backend
 ./mvnw test
-./mvnw verify
+./mvnw -Pintegration-tests verify
 ```
 
 Frontend commands:
@@ -44,7 +44,7 @@ npm test -- --run
 npm run build
 ```
 
-Consult the exact Maven and npm scripts in the checked-out repository if the project configuration changes. Maven `verify` is intended to include the integration-test phase configured through Failsafe.
+Consult the exact Maven and npm scripts in the checked-out repository if the project configuration changes. The `integration-tests` profile activates Failsafe. Run `-Pintegration-tests verify` to include the disposable database backup/restore integration tests; plain `verify` does not activate these tests.
 
 ## CI
 

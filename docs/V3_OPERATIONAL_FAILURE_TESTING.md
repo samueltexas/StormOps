@@ -39,7 +39,7 @@ PostgreSQL volume. Do not run an API-kill test against a live experiment.
 | Database completion unavailable after external action | Failure is observable; the application never retries the pod deletion | Mockito regression; durability depends on transactional DB behavior |
 | API process lost with outstanding INJECTION_INTENT | Active UUID survives repository reinitialization; new admission and resume are blocked; intent audit persists | Testcontainers integration |
 | PostgreSQL paused after admission | A new admission fails while unavailable; persisted intent and active reservation survive restoration; resume remains blocked | Disposable PostgreSQL/Testcontainers outage integration |
-| Backup/restore of audit and experiment history | Restore must preserve run ownership, stopped state and event sequence | Planned disposable restore test |
+| Backup/restore of audit and experiment history | Restore must preserve completed history, active run ownership, stopped state, audit rows and sequence continuity | Disposable PostgreSQL backup/restore integration test |
 
 ## Recovery decision
 
@@ -95,8 +95,8 @@ resource. The synthetic intent does not indicate an actual injected fault.
       any Kubernetes fault or use ambient Kubernetes credentials.
 - [x] Assert that the restarted API retains the reservation, rejects another
       injection and a premature resume, and preserves the audit trail.
-- [ ] Verify Java 21 and Java 25 CI and local execution.
-- [ ] Review evidence and integrate the incremental pull request.
+- [x] Verify Java 21 and Java 25 CI and local execution.
+- [x] Review evidence and integrate PR #5.
 
 The test forcibly terminates **only the Java child process it created**, not
 the local StormOps API. Its database, credentials and loopback port belong
@@ -104,11 +104,24 @@ only to Testcontainers and the test process. A nonexistent kubeconfig is passed
 to both child processes. This test demonstrates crash-safe admission blocking,
 not successful remediation of an injected fault.
 
+### Increment 3.4 — Backup, Restore & Evidence Verification
+
+- [x] Add a `pg_dump -Fc` / `pg_restore` integration test between two
+      independently owned PostgreSQL Testcontainers instances.
+- [x] Verify completed history, active reservation, stop state, audit entries,
+      Flyway schema history and BIGSERIAL continuity after restoration.
+- [x] Assert restored ambiguous intent remains unfinished, and admission/resume
+      continue to fail closed.
+- [ ] Confirm Java 21/25 CI and local integration tests.
+- [ ] Review results and integrate this pull request.
+
+The archive contains synthetic records only and stays within the test process.
+It is not a backup of the established StormOps database and does not restore
+any existing Docker volume, API service or Kubernetes object.
+
 ### Remaining Milestone 3 work
 
 - [ ] Add disposable network-partition tests with safe cleanup.
-- [ ] Verify backup and restore of experiment history, safety state and audit sequence
-      in isolated containers.
 - [ ] Provide non-secret, reproducible evidence and restoration runbooks.
 - [ ] Prove no automatic unlocking or reinjection in every ambiguous case.
 
