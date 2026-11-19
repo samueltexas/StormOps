@@ -14,6 +14,7 @@ set -a
 source "$ENV_FILE"
 set +a
 
-export KUBECONFIG="$PROJECT/.kube/stormops-config"
+export STORMOPS_KUBECONFIG="$PROJECT/.kube/stormops-runner-config"
+export KUBECONFIG="$STORMOPS_KUBECONFIG"
 cd "$PROJECT/backend"
 exec ./mvnw -B spring-boot:run

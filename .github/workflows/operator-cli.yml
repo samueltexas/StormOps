@@ -1,0 +1,42 @@
+name: StormOps Local Operator CI
+
+on:
+  push:
+    paths:
+      - 'scripts/stormops.py'
+      - 'scripts/tests/**'
+      - '.github/workflows/operator-cli.yml'
+      - 'docs/LOCAL_OPERATIONS.md'
+      - 'README.md'
+  pull_request:
+    paths:
+      - 'scripts/stormops.py'
+      - 'scripts/tests/**'
+      - '.github/workflows/operator-cli.yml'
+      - 'docs/LOCAL_OPERATIONS.md'
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  operator-tests:
+    name: Operator CLI — Python 3.9
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.9'
+      - name: Validate operator CLI syntax
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -B -c 'import ast, pathlib; files = [pathlib.Path("scripts/stormops.py"), pathlib.Path("scripts/tests/test_stormops_operator.py")]; [ast.parse(p.read_text(encoding="utf-8"), filename=str(p)) for p in files]'
+      - name: Run isolated operator tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -B -m unittest discover -s scripts/tests -p 'test_stormops_operator.py' -v
+      - name: Check CLI command discovery
+        run: python -B scripts/stormops.py --help

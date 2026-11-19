@@ -37,3 +37,6 @@ backend/pom.xml.before-flyway-fix
 
 # Disposable CI evidence (uploaded by Actions, never source-controlled)
 /artifacts/
+
+__pycache__/
+*.pyc

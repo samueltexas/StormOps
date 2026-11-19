@@ -28,7 +28,7 @@ StormOps is a local-first engineering project for conducting controlled resilien
 | Testing | Spring Boot Test, Testcontainers, Vitest, React Testing Library |
 | Infrastructure | Docker, Kubernetes, kind |
 | Observability | Prometheus, Grafana |
-| CI | GitHub Actions, Temurin JDK 25, Node.js 24 |
+| CI | GitHub Actions, Temurin JDK 21/25, Node.js 24, Python 3.9 |
 
 ## Architecture
 
@@ -62,7 +62,7 @@ StormOps/
 
 For local development, install:
 
-- JDK 25 (the backend is configured with a Java 21 language target)
+- JDK 21 or 25 (the backend targets Java 21; CI verifies both)
 - Node.js 24 and npm
 - Docker Desktop with a working Docker engine
 - `kubectl` and `kind` for the Kubernetes laboratory
@@ -96,6 +96,17 @@ npm test
 npm run build
 ```
 
+## V3 local operations
+
+Use the dependency-free Python CLI to inspect the existing lab without changing Kubernetes resources:
+
+```bash
+python3 scripts/stormops.py doctor
+python3 scripts/stormops.py status --json
+```
+
+To start the secured API or React UI deliberately, use `python3 scripts/stormops.py start-api` or `python3 scripts/stormops.py start-ui`. These reuse existing launchers and never run legacy installers. Review [local operations](docs/LOCAL_OPERATIONS.md) for safety checks and limitations.
+
 ## Local environment
 
 The application is designed for a local Kubernetes laboratory. Review the scripts in `scripts/` and manifests in `infrastructure/` before running them. Database connection settings and authentication credentials are supplied through environment variables; **do not commit local secrets or Kubernetes credentials**.
@@ -106,11 +117,7 @@ The backend's default configuration binds to `127.0.0.1:18080`. The local databa
 
 ## Continuous integration
 
-The [StormOps CI workflow](https://github.com/samueltexas/StormOps/actions/workflows/ci.yml) runs on pushes and pull requests. It contains three jobs:
-
-1. **Backend unit tests** — Maven test suite.
-2. **Backend integration tests** — Maven Failsafe and isolated PostgreSQL through Testcontainers.
-3. **Frontend tests and build** — `npm ci`, Vitest, and Vite production build.
+The [StormOps CI workflow](https://github.com/samueltexas/StormOps/actions/workflows/ci.yml) runs on pushes and pull requests. It verifies Java 21/25 package and PostgreSQL integration tests, frontend tests and production build, a real disposable-kind recovery experiment, and container image smoke tests. The [published-image E2E workflow](.github/workflows/release-image-e2e.yml) independently proves the v2.0.0 release artifacts by immutable digest. The [local operator workflow](.github/workflows/operator-cli.yml) tests the V3 Python CLI. Release publication remains explicitly gated on version tags; pull requests never publish packages.
 
 The initial public workflow run completed successfully: [run #42836614444](https://github.com/samueltexas/StormOps/actions/runs/42836614444).
 
@@ -171,7 +178,7 @@ Real monitoring of the local StormOps Kubernetes demo service, including service
 
 ## v2 verification and delivery
 
-Java 21 bytecode is explicit and CI tests JDK 21 and 25. A disposable kind E2E job verifies restricted ServiceAccount permissions, performs one real pod termination through the authenticated API, and checks replacement, steady state and durable audit. Version-tag publishing to GHCR is gated on the complete suite; it never deploys automatically. See [CI and container delivery](docs/CI_DELIVERY.md) for credential provisioning, evidence and release steps. Workflow configuration alone does not mean images have already been published.
+Java 21 bytecode is explicit and CI tests JDK 21 and 25. A disposable kind E2E job verifies restricted ServiceAccount permissions, performs one real pod termination through the authenticated API, and checks replacement, steady state and durable audit. Version-tag publishing to GHCR is gated on the complete suite; it never deploys automatically. See [CI and container delivery](docs/CI_DELIVERY.md) for credential provisioning, evidence and release steps. The [v2.0.0 release](https://github.com/samueltexas/StormOps/releases/tag/v2.0.0) records published immutable image digests, independently validated in CI.
 
 ## Release v2.0.0
 

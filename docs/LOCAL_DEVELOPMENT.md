@@ -86,3 +86,7 @@ Consult the project's setup scripts before deleting clusters, containers, or vol
 ## v2 startup changes
 
 Security is enabled by default. The initial kill switch is engaged, and experiment endpoints default to dry-run. Prometheus must be reachable on loopback port 19090 with healthy, fresh metrics and real traffic. Follow [the v2 safety guide](V2_SAFETY.md) before explicitly enabling live injection.
+
+## V3 local operator
+
+Use `python3 scripts/stormops.py doctor` for read-only preflight, `status` for diagnostics, and the explicit `start-api` / `start-ui` commands for foreground startup. See [local operations](LOCAL_OPERATIONS.md). Existing historical installers must not be rerun blindly because they can overwrite committed files.
