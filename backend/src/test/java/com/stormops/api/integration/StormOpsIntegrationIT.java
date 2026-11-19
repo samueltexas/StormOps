@@ -160,6 +160,39 @@ class StormOpsIntegrationIT {
                 "INVALID_CONFIRMATION", null).statusCode());
     }
 
+    @Test void interruptedInFlightIntentRemainsReservedAfterRepositoryRestart() {
+        // This writes only to the disposable Testcontainers database.
+        safety.stop(false, "integration");
+        UUID runId = UUID.randomUUID();
+        try {
+            safety.begin(runId, "integration", "POD_TERMINATION", false);
+            safety.audit(runId, "integration", "INJECTION_INTENT",
+                    "Synthetic intent only; no Kubernetes action was issued");
+
+            // A new repository instance models process restart without clearing durable state.
+            var restarted = new com.stormops.api.persistence.SafetyRepository(
+                    new JdbcTemplate(jdbc.getDataSource()), transactions);
+            assertEquals(runId, restarted.state().get("active_run"));
+            assertThrows(IllegalStateException.class,
+                    () -> restarted.begin(UUID.randomUUID(), "integration", "BASELINE", false));
+
+            restarted.stop(true, "reviewer");
+            assertEquals(true, restarted.state().get("stopped"));
+            assertThrows(IllegalStateException.class,
+                    () -> restarted.stop(false, "reviewer"));
+
+            assertEquals(java.util.List.of("STARTED", "INJECTION_INTENT"),
+                    jdbc.queryForList(
+                            "SELECT event FROM experiment_audit WHERE run_id = ? ORDER BY sequence",
+                            String.class, runId));
+            assertNull(repository.findById(runId),
+                    "A synthetic in-flight intent must never be reported as recovered");
+        } finally {
+            // The temporary database is isolated; leave the singleton stopped between tests.
+            jdbc.update("UPDATE safety_control SET active_run = NULL, stopped = TRUE WHERE id = 1");
+        }
+    }
+
     @Test void analyticsAndReliabilityReturnValidReports() throws Exception {
         var analytics = request("GET", "/api/v1/analytics/summary", "viewer", "stormops-integration-viewer-only", null, null);
         assertEquals(200, analytics.statusCode());
