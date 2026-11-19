@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.stormops.api.persistence.ExperimentRepository;
 import com.stormops.api.persistence.SafetyRepository;
 import eu.rekawek.toxiproxy.ToxiproxyClient;
-import eu.rekawek.toxiproxy.model.Proxy;
+import eu.rekawek.toxiproxy.Proxy;
 import eu.rekawek.toxiproxy.model.ToxicDirection;
 import java.util.List;
 import java.util.UUID;
