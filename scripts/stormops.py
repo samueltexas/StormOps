@@ -343,6 +343,53 @@ def can_start_api(inspector: Inspector) -> List[str]:
             valid = False
         if not valid:
             reasons.append("Dedicated runner identity could not be verified")
+        else:
+            # Verify the complete least-privilege contract before startup.
+            rules = (
+                ("list", "pods", "stormops-lab", True),
+                ("get", "pods", "stormops-lab", True),
+                ("delete", "pods", "stormops-lab", True),
+                ("get", "deployments/stormops-demo", "stormops-lab", True),
+                ("get", "secrets", "stormops-lab", False),
+                ("create", "pods", "stormops-lab", False),
+                ("patch", "deployments/stormops-demo", "stormops-lab", False),
+                ("delete", "pods", "default", False),
+                ("get", "nodes", "stormops-lab", False),
+            )
+
+            base = inspector.kubectl_prefix(inspector.runner_config)
+
+            for verb, resource, namespace, expected in rules:
+                command = base + [
+                    "auth", "can-i", verb, resource, "-n", namespace
+                ]
+
+                try:
+                    response = subprocess.run(
+                        command,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=8,
+                    )
+
+                    answer = response.stdout.strip().lower()
+                    permitted = response.returncode == 0 and answer == "yes"
+                    denied = response.returncode == 1 and answer == "no"
+
+                    if not (permitted or denied) or permitted != expected:
+                        reasons.append(
+                            "Runner RBAC verification failed: {} {} in {}".format(
+                                verb, resource, namespace
+                            )
+                        )
+                except (OSError, subprocess.TimeoutExpired):
+                    reasons.append(
+                        "Runner RBAC verification unavailable: {} {}".format(
+                            verb, resource
+                        )
+                    )
+
     return reasons
 
 
