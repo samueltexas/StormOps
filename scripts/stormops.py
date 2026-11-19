@@ -60,6 +60,23 @@ class Inspector:
         return True, result.stdout.strip()
 
     @staticmethod
+    def access_decision(argv: Sequence[str], timeout: int = 8) -> Optional[bool]:
+        """Return True/False for explicit RBAC answers; None for command failures."""
+        try:
+            result = subprocess.run(
+                list(argv), capture_output=True, text=True, check=False, timeout=timeout
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        answer = result.stdout.strip().lower()
+        # kubectl exits 1 for a denied SelfSubjectAccessReview.
+        if result.returncode == 0 and answer == "yes" and not result.stderr.strip():
+            return True
+        if result.returncode == 1 and answer == "no" and not result.stderr.strip():
+            return False
+        return None
+
+    @staticmethod
     def tcp_open(port: int) -> bool:
         try:
             with socket.create_connection(("127.0.0.1", port), timeout=0.5):
@@ -239,11 +256,11 @@ class Inspector:
             return
         for verb, resource, allowed in (("list", "pods", True), ("get", "secrets", False),
                                         ("delete", "pods", True)):
-            ok, output = self.command(prefix + ["auth", "can-i", verb, resource])
-            actual = output.strip().lower() == "yes" if ok else False
-            passed = actual == allowed
-            self.add("Runner RBAC: {} {}".format(verb, resource), "PASS" if passed else "FAIL",
-                     "Allowed" if actual else "Denied")
+            decision = self.access_decision(prefix + ["auth", "can-i", verb, resource])
+            passed = decision is allowed
+            detail = "Unknown" if decision is None else ("Allowed" if decision else "Denied")
+            self.add("Runner RBAC: {} {}".format(verb, resource),
+                     "PASS" if passed else "FAIL", detail)
 
     def ports(self) -> None:
         for label, port in (("PostgreSQL TCP", 15432), ("Demo tunnel TCP", 18081),
@@ -364,29 +381,11 @@ def can_start_api(inspector: Inspector) -> List[str]:
                     "auth", "can-i", verb, resource, "-n", namespace
                 ]
 
-                try:
-                    response = subprocess.run(
-                        command,
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                        timeout=8,
-                    )
-
-                    answer = response.stdout.strip().lower()
-                    permitted = response.returncode == 0 and answer == "yes"
-                    denied = response.returncode == 1 and answer == "no"
-
-                    if not (permitted or denied) or permitted != expected:
-                        reasons.append(
-                            "Runner RBAC verification failed: {} {} in {}".format(
-                                verb, resource, namespace
-                            )
-                        )
-                except (OSError, subprocess.TimeoutExpired):
+                decision = inspector.access_decision(command)
+                if decision is None or decision is not expected:
                     reasons.append(
-                        "Runner RBAC verification unavailable: {} {}".format(
-                            verb, resource
+                        "Runner RBAC verification failed: {} {} in {}".format(
+                            verb, resource, namespace
                         )
                     )
 

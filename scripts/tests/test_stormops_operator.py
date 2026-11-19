@@ -5,6 +5,7 @@ import io
 import json
 import os
 import socket
+import subprocess
 import stat
 import tempfile
 import unittest
@@ -105,6 +106,93 @@ class SafetyTests(unittest.TestCase):
                     with patch.object(operator.Inspector, "tcp_open", side_effect=lambda p: p == 15432):
                         reasons = operator.can_start_api(inspector)
             self.assertTrue(any("Authentication is explicitly disabled" in x for x in reasons))
+
+    def test_rbac_reply_distinguishes_denials_from_command_errors(self):
+        cases = (
+            (0, "yes\\n", "", True),
+            (1, "no\\n", "", False),
+            (1, "", "Forbidden", None),
+            (1, "no\\n", "TLS verification failed", None),
+            (0, "no\\n", "", None),
+        )
+        for returncode, stdout, stderr, expected in cases:
+            with self.subTest(returncode=returncode, stdout=stdout, stderr=stderr):
+                response = subprocess.CompletedProcess(
+                    ["kubectl"], returncode, stdout, stderr
+                )
+                with patch.object(operator.subprocess, "run", return_value=response):
+                    self.assertIs(
+                        operator.Inspector.access_decision(["kubectl", "auth", "can-i", "get", "secrets"]),
+                        expected,
+                    )
+        with patch.object(operator.subprocess, "run", side_effect=subprocess.TimeoutExpired("kubectl", 8)):
+            self.assertIsNone(operator.Inspector.access_decision(["kubectl", "auth", "can-i"]))
+
+    def test_runner_diagnostics_fail_closed_on_unknown_permission(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            inspector = operator.Inspector(Path(tmp))
+            inspector.runner_config.parent.mkdir()
+            inspector.runner_config.write_text("synthetic kubeconfig")
+            inspector.runner_config.chmod(0o600)
+            identity = json.dumps({"status": {"userInfo": {
+                "username": "system:serviceaccount:stormops-lab:stormops-runner"
+            }}})
+            with patch.object(operator.Inspector, "command", return_value=(True, identity)):
+                with patch.object(operator.Inspector, "access_decision",
+                                  side_effect=[True, None, True]):
+                    inspector.runner_identity()
+            checks = {item.name: item for item in inspector.checks}
+            self.assertEqual(checks["Runner identity"].result, "PASS")
+            self.assertEqual(checks["Runner RBAC: list pods"].result, "PASS")
+            self.assertEqual(checks["Runner RBAC: get secrets"].result, "FAIL")
+            self.assertEqual(checks["Runner RBAC: get secrets"].detail, "Unknown")
+
+    def test_api_preflight_checks_every_runner_permission(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            inspector = operator.Inspector(Path(tmp))
+            inspector.runner_config.parent.mkdir()
+            inspector.security_file.parent.mkdir()
+            (inspector.root / "scripts").mkdir()
+            for file in (inspector.runner_config, inspector.admin_config):
+                file.write_text("synthetic kubeconfig")
+                file.chmod(0o600)
+            inspector.security_file.write_text(
+                "STORMOPS_SECURITY_ENABLED=true\\n"
+                "STORMOPS_ADMIN_PASSWORD=example\\n"
+                "STORMOPS_VIEWER_PASSWORD=example\\n"
+            )
+            inspector.database_file.write_text("STORMOPS_DB_PASSWORD=example\\n")
+            for file in (inspector.security_file, inspector.database_file):
+                file.chmod(0o600)
+            (inspector.root / "scripts/run-api-phase10d.sh").write_text("#!/bin/bash\\n")
+            identity = json.dumps({"status": {"userInfo": {
+                "username": "system:serviceaccount:stormops-lab:stormops-runner"
+            }}})
+            allowed = [True, True, True, True, False, False, False, False, False]
+            scenarios = (
+                (allowed, False),
+                (allowed[:4] + [True] + allowed[5:], True),
+                (allowed[:4] + [None] + allowed[5:], True),
+            )
+            with patch.dict(operator.os.environ, {"STORMOPS_SECURITY_ENABLED": "true"}):
+                with patch.object(operator.Inspector, "kube_target", return_value=True):
+                    with patch.object(operator.Inspector, "command", return_value=(True, identity)):
+                        with patch.object(operator.Inspector, "tcp_open", side_effect=lambda p: p == 15432):
+                            for replies, must_fail in scenarios:
+                                with self.subTest(replies=replies):
+                                    with patch.object(operator.Inspector, "access_decision",
+                                                      side_effect=replies) as decisions:
+                                        reasons = operator.can_start_api(inspector)
+                                    self.assertEqual(decisions.call_count, 9)
+                                    self.assertEqual(bool(reasons), must_fail)
+                                    if must_fail:
+                                        self.assertTrue(any("Runner RBAC verification failed" in r for r in reasons))
+
+    def test_api_launcher_uses_only_runner_kubeconfig(self):
+        launcher = (SCRIPT.parent / "run-api-phase5.sh").read_text(encoding="utf-8")
+        self.assertIn('export STORMOPS_KUBECONFIG="$PROJECT/.kube/stormops-runner-config"', launcher)
+        self.assertIn('export KUBECONFIG="$STORMOPS_KUBECONFIG"', launcher)
+        self.assertNotIn('export KUBECONFIG="$PROJECT/.kube/stormops-config"', launcher)
 
     def test_http_status_handles_authentication(self):
         from urllib.error import HTTPError
