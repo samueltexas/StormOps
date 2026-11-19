@@ -38,7 +38,7 @@ PostgreSQL volume. Do not run an API-kill test against a live experiment.
 | Runner credentials revoked during deletion | Outcome is ABORTED, stop is latched at completion, deletion is not retried | Mockito regression |
 | Database completion unavailable after external action | Failure is observable; the application never retries the pod deletion | Mockito regression; durability depends on transactional DB behavior |
 | API process lost with outstanding INJECTION_INTENT | Active UUID survives repository reinitialization; new admission and resume are blocked; intent audit persists | Testcontainers integration |
-| PostgreSQL outage after admission | Outcome may be unknown until DB is available and records are reviewed | Planned isolated outage E2E |
+| PostgreSQL paused after admission | A new admission fails while unavailable; persisted intent and active reservation survive restoration; resume remains blocked | Disposable PostgreSQL/Testcontainers outage integration |
 | Backup/restore of audit and experiment history | Restore must preserve run ownership, stopped state and event sequence | Planned disposable restore test |
 
 ## Recovery decision
@@ -70,13 +70,26 @@ force-unlock endpoint, automatic lease expiry or automatic incident repair.
       ambiguous deletion and completion failures.
 - [x] Add a PostgreSQL integration regression for persisted injection intent and
       restart-safe admission exclusion.
-- [ ] Confirm Java 21/25 CI, PostgreSQL integration, frontend and existing kind E2E
-      on the new feature branch.
-- [ ] Review the test evidence and only then integrate the pull request.
+- [x] Confirm Java 21/25 CI, PostgreSQL integration, frontend and existing kind E2E
+      on the reviewed feature branch.
+- [x] Review the test evidence and integrate PR #3.
+
+### Increment 3.2 — Isolated PostgreSQL outage recovery
+
+- [x] Add an exclusive Testcontainers PostgreSQL outage test that pauses and resumes
+      only its own database container.
+- [x] Verify that no second experiment is admitted during the outage and that the
+      active run, synthetic injection intent and safety stop survive restoration.
+- [ ] Validate on Java 21 and 25 in GitHub Actions and locally.
+- [ ] Review this increment before integrating into main.
+
+Docker pause represents database process unavailability, not a pure TCP network
+partition. This test uses no existing StormOps database, container or Kubernetes
+resource. The synthetic intent does not indicate an actual injected fault.
 
 ### Remaining Milestone 3 work
 
-- [ ] Add disposable PostgreSQL network-outage experiments with safe cleanup.
+- [ ] Add disposable network-partition tests with safe cleanup.
 - [ ] Add crash tests using independently owned test API processes.
 - [ ] Verify backup and restore of experiment history, safety state and audit sequence
       in isolated containers.
