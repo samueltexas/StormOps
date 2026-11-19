@@ -1,0 +1,46 @@
+name: Published v2.0.0 image E2E
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/release-image-e2e.yml'
+      - 'scripts/ci/kind_e2e.py'
+      - 'docs/RELEASE_IMAGE_E2E.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-image-e2e:
+    name: Immutable GHCR images on disposable kind (amd64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      STORMOPS_E2E_API_IMAGE: ghcr.io/samueltexas/stormops-api@sha256:fb8a11d7d0137540fe7bd8eecc8cf5148f6be32b56bf5db20d1992c86a068221
+      STORMOPS_E2E_DEMO_IMAGE: ghcr.io/samueltexas/stormops-demo@sha256:8e89830873b0982a89bf453ff7a895f9a49841d829df24a035103bf49609f1f2
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install pinned kind and kubectl
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 -o kind https://kind.sigs.k8s.io/dl/v0.33.0/kind-linux-amd64
+          curl --fail --location --retry 3 -o kind.sha256sum https://kind.sigs.k8s.io/dl/v0.33.0/kind-linux-amd64.sha256sum
+          sed 's/kind-linux-amd64/kind/' kind.sha256sum | sha256sum --check
+          curl --fail --location --retry 3 -o kubectl https://dl.k8s.io/release/v1.36.1/bin/linux/amd64/kubectl
+          curl --fail --location --retry 3 -o kubectl.sha256 https://dl.k8s.io/release/v1.36.1/bin/linux/amd64/kubectl.sha256
+          echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
+          chmod +x kind kubectl
+          sudo mv kind kubectl /usr/local/bin/
+      - name: Verify released API and demo with real fault and recovery
+        run: python3 scripts/ci/kind_e2e.py
+      - name: Upload sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: published-release-v2-e2e-evidence
+          path: artifacts/e2e/
+          retention-days: 7
+          if-no-files-found: warn
