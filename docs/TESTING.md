@@ -66,6 +66,13 @@ The workflow runs backend unit tests, backend integration tests, and frontend te
 
 The project does not claim exhaustive browser E2E coverage, penetration testing, failure-injection testing against arbitrary Kubernetes clusters, or distributed-lock correctness. Expand test coverage before supporting multi-instance deployments or untrusted users.
 
+## V3 operational failure testing
+
+See [V3 operational failure testing](V3_OPERATIONAL_FAILURE_TESTING.md) for the
+safety failure matrix and the distinction between mock-based coverage and
+pending disposable E2E scenarios. No existing local cluster or database is
+modified by the new tests.
+
 ## v2 safety regression suite
 
 Run `./mvnw --offline --batch-mode --no-transfer-progress -Pintegration-tests verify` from `backend` when dependencies are cached. Testcontainers uses a disposable PostgreSQL database and never the local StormOps database. Unit tests mock external fault operations. Coverage includes concurrent admission, retained reservations after failed completion, fresh telemetry, fixed pod eligibility, dry-run, stop checks and default HTTP authentication. No Kubernetes experiment is run by this suite.
