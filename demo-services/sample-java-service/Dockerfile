@@ -1,16 +1,15 @@
-# A aplicação é compilada previamente pelo Maven Wrapper.
-# A imagem contém apenas o JAR e o runtime Java.
-# Não precisamos de instalar Maven dentro do container.
-
 FROM eclipse-temurin:21-jre
+
+LABEL org.opencontainers.image.source="https://github.com/samueltexas/StormOps" \
+      org.opencontainers.image.licenses="MIT"
 
 WORKDIR /app
 
-# Executar como utilizador não privilegiado.
+# Run as an unprivileged user.
 RUN groupadd --system stormops \
     && useradd --system --gid stormops stormops
 
-COPY target/*.jar /app/app.jar
+COPY target/stormops-demo.jar /app/app.jar
 
 USER stormops
 

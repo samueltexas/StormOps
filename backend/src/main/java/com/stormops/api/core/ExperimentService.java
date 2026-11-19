@@ -2,39 +2,42 @@ package com.stormops.api.core;
 
 import com.stormops.api.kubernetes.KubernetesGateway;
 import com.stormops.api.persistence.ExperimentRepository;
-import java.time.Duration;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.stormops.api.persistence.SafetyRepository;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.locks.ReentrantLock;
-import org.springframework.stereotype.Service;
 
 @Service
 public class ExperimentService {
-
-    private static final int REQUIRED_REPLICAS = 2;
-    private static final Duration RECOVERY_TIMEOUT = Duration.ofSeconds(90);
-
     private final KubernetesGateway kubernetes;
     private final ExperimentRepository repository;
     private final HttpSimulationGateway httpSimulations;
-    private final ReentrantLock experimentLock = new ReentrantLock();
+    private final SafetyRepository safety;
+    private final PrometheusGuard telemetry;
 
-    /** Retain the existing constructor for Phase 4/5 unit tests. */
-    public ExperimentService(KubernetesGateway kubernetes, ExperimentRepository repository) {
-        this(kubernetes, repository, new HttpSimulationGateway());
+    private final Duration budget;
+    private final Duration observationWindow;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ExperimentService(KubernetesGateway kubernetes, ExperimentRepository repository,
+                             HttpSimulationGateway httpSimulations, SafetyRepository safety,
+                             PrometheusGuard telemetry) {
+        this(kubernetes, repository, httpSimulations, safety, telemetry, Duration.ofSeconds(90), Duration.ofSeconds(16));
     }
-
-    @Autowired
-    public ExperimentService(KubernetesGateway kubernetes,
-                             ExperimentRepository repository,
-                             HttpSimulationGateway httpSimulations) {
+    ExperimentService(KubernetesGateway kubernetes, ExperimentRepository repository,
+                      HttpSimulationGateway httpSimulations, SafetyRepository safety,
+                      PrometheusGuard telemetry, Duration budget, Duration observationWindow) {
+        this.budget = budget;
+        this.observationWindow = observationWindow;
         this.kubernetes = kubernetes;
         this.repository = repository;
         this.httpSimulations = httpSimulations;
+        this.safety = safety;
+        this.telemetry = telemetry;
     }
-
     public List<ExperimentResult> history() {
         return repository.findRecent(100, 0);
     }
@@ -54,130 +57,111 @@ public class ExperimentService {
         return repository.findById(id);
     }
 
-    public ExperimentResult terminateOnePod() {
-        // Serialize destructive experiments against the same demo deployment.
-        if (!experimentLock.tryLock()) {
-            throw new IllegalStateException("An experiment is already running");
-        }
 
-        UUID id = UUID.randomUUID();
-        Instant startedAt = Instant.now();
-        String target = "stormops-demo";
-        String status = "FAILED";
-        String detail = "Experiment did not complete";
-        long recoveryMillis = -1;
-
-        try {
-            int desired = kubernetes.desiredReplicas();
-            int ready = kubernetes.readyReplicas();
-            List<String> pods = kubernetes.runningPods();
-
-            // Do not inject a failure when the deployment has reduced redundancy.
-            if (desired != REQUIRED_REPLICAS
-                    || ready != REQUIRED_REPLICAS
-                    || pods.size() != REQUIRED_REPLICAS) {
-                throw new IllegalStateException(
-                        "Safety check failed: exactly two healthy replicas are required"
-                );
-            }
-
-            target = pods.getFirst();
-            kubernetes.deletePod(target);
-            Instant deletionRequestedAt = Instant.now();
-            Instant deadline = deletionRequestedAt.plus(RECOVERY_TIMEOUT);
-
-            while (Instant.now().isBefore(deadline)) {
-                boolean oldPodGone = !kubernetes.podExists(target);
-                boolean replicasReady = kubernetes.readyReplicas() == REQUIRED_REPLICAS;
-
-                if (oldPodGone && replicasReady) {
-                    recoveryMillis = Duration.between(
-                            deletionRequestedAt, Instant.now()
-                    ).toMillis();
-                    status = "RECOVERED";
-                    detail = "Replacement pod observed and desired replicas restored";
-                    break;
-                }
-
-                Thread.sleep(2000);
-            }
-
-            if (!"RECOVERED".equals(status)) {
-                status = "TIMED_OUT";
-                detail = "Deployment did not recover within 90 seconds";
-            }
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            detail = "Experiment interrupted";
-        } catch (RuntimeException exception) {
-            detail = exception.getMessage() == null
-                    ? "Experiment failed unexpectedly"
-                    : exception.getMessage();
-        } finally {
-            experimentLock.unlock();
-        }
-
-        ExperimentResult result = new ExperimentResult(
-                id, startedAt, Instant.now(), "POD_TERMINATION",
-                target, status, recoveryMillis, detail
-        );
-
-        // Database failures must remain visible to the caller, not masquerade as success.
-        repository.save(result);
-        return result;
+    public static String actor() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth == null ? "dev-anonymous" : auth.getName();
     }
-
-    /** Runs one bounded, request-scoped HTTP simulation in the fixed lab target. */
+    public ExperimentResult terminateOnePod() { return terminateOnePod(false); }
+    public ExperimentResult terminateOnePod(boolean dryRun) { return execute("POD_TERMINATION", 0, dryRun); }
     public ExperimentResult runHttpSimulation(String type, int latencyMillis) {
-        if (!List.of("BASELINE", "HTTP_LATENCY", "HTTP_ERROR").contains(type)) {
-            throw new IllegalArgumentException("Unsupported HTTP experiment type");
+        return runHttpSimulation(type, latencyMillis, false);
+    }
+    public ExperimentResult runHttpSimulation(String type, int latencyMillis, boolean dryRun) {
+        if (!List.of("BASELINE", "HTTP_LATENCY", "HTTP_ERROR").contains(type)) throw new IllegalArgumentException("Unsupported HTTP experiment type");
+        if (latencyMillis < 0 || latencyMillis > 2000 || (!"HTTP_LATENCY".equals(type) && latencyMillis != 0)) throw new IllegalArgumentException("Invalid latency (0..2000ms, HTTP_LATENCY only)");
+        return execute(type, latencyMillis, dryRun);
+    }
+    private void healthy(Runnable check) {
+        check.run();
+        int desired = kubernetes.desiredReplicas();
+        check.run();
+        int ready = kubernetes.readyReplicas();
+        check.run();
+        int pods = kubernetes.runningPods().size();
+        if (desired != 2 || ready != 2 || pods != 2) {
+            throw new IllegalStateException("Exactly two healthy allowlisted replicas are required");
         }
-        if (latencyMillis < 0 || latencyMillis > 2000) {
-            throw new IllegalArgumentException("Latency must be between 0 and 2000 milliseconds");
-        }
-        if (!"HTTP_LATENCY".equals(type) && latencyMillis != 0) {
-            throw new IllegalArgumentException("Latency applies only to HTTP_LATENCY");
-        }
-        if (!experimentLock.tryLock()) {
-            throw new IllegalStateException("An experiment is already running");
-        }
-
+        check.run();
+        if (httpSimulations.invoke("BASELINE", 0).statusCode() != 200) throw new IllegalStateException("Baseline request failed");
+        check.run();
+        telemetry.verifyHealthy();
+    }
+    private void checkpoint(UUID id, boolean dryRun, long deadline) {
+        if (Thread.currentThread().isInterrupted()) throw new IllegalStateException("Experiment interrupted");
+        if (System.nanoTime() >= deadline) throw new DeadlineExceeded();
+        safety.checkpoint(id, dryRun);
+    }
+    private ExperimentResult execute(String type, int latency, boolean dryRun) {
         UUID id = UUID.randomUUID();
-        Instant startedAt = Instant.now();
+        String actor = actor();
+        Instant started = Instant.now();
+        long deadline = System.nanoTime() + budget.toNanos();
+        String target = "stormops-lab/app=stormops-demo";
         String status = "FAILED";
-        String detail = "HTTP experiment did not complete";
-        long elapsedMillis = -1;
-
+        String detail = "Safety precondition failed";
+        long elapsed = -1;
+        boolean attempted = false;
+        // This durable reservation and STARTED audit must commit before any external action.
+        safety.begin(id, actor, type, dryRun);
         try {
-            HttpSimulationGateway.Observation observation =
-                    httpSimulations.invoke(type, latencyMillis);
-            elapsedMillis = observation.elapsedMillis();
-            int expectedStatus = "HTTP_ERROR".equals(type) ? 503 : 200;
-            if (observation.statusCode() == expectedStatus) {
-                status = "RECOVERED";
-                detail = "Expected HTTP " + expectedStatus
-                        + " observed; elapsed=" + elapsedMillis + "ms"
-                        + ("HTTP_LATENCY".equals(type)
-                        ? "; injected=" + latencyMillis + "ms" : "");
+            checkpoint(id, dryRun, deadline);
+            healthy(() -> checkpoint(id, dryRun, deadline));
+            safety.audit(id, actor, "PRECHECK_PASSED", target);
+            checkpoint(id, dryRun, deadline);
+            if (dryRun) {
+                status = "DRY_RUN";
+                detail = "Preconditions passed; no fault injected; maximum pods=1, concurrency=1";
             } else {
-                detail = "Unexpected HTTP " + observation.statusCode()
-                        + "; expected=" + expectedStatus;
+                if ("POD_TERMINATION".equals(type)) target = kubernetes.runningPods().getFirst();
+                safety.audit(id, actor, "INJECTION_INTENT", type + "; target=" + target);
+                checkpoint(id, false, deadline);
+                attempted = true;
+                long injected = System.nanoTime();
+                long responseMillis = -1;
+                if ("POD_TERMINATION".equals(type)) {
+                    kubernetes.deletePod(target);
+                    while (true) {
+                        checkpoint(id, false, deadline);
+                        telemetry.verifyHealthy();
+                        if (!kubernetes.podExists(target) && kubernetes.readyReplicas() == 2) break;
+                        Thread.sleep(1000);
+                    }
+                } else {
+                    var observed = httpSimulations.invoke(type, latency);
+                    responseMillis = observed.elapsedMillis();
+                    int expected = "HTTP_ERROR".equals(type) ? 503 : 200;
+                    if (observed.statusCode() != expected) throw new IllegalStateException("Unexpected simulation response");
+                }
+                elapsed = responseMillis >= 0 ? responseMillis : Duration.ofNanos(System.nanoTime() - injected).toMillis();
+                // Observe across at least one configured 15-second Prometheus scrape interval.
+                long observationEnd = System.nanoTime() + observationWindow.toNanos();
+                do {
+                    checkpoint(id, false, deadline);
+                    healthy(() -> checkpoint(id, dryRun, deadline));
+                    if (System.nanoTime() >= observationEnd) break;
+                    Thread.sleep(1000);
+                } while (System.nanoTime() < observationEnd);
+                checkpoint(id, false, deadline);
+                safety.audit(id, actor, "POSTCHECK_PASSED", "Replicas, baseline and telemetry healthy");
+                status = "RECOVERED";
+                detail = "Fault completed and post-experiment steady state verified";
             }
-        } catch (RuntimeException exception) {
-            detail = exception.getMessage() == null
-                    ? "HTTP simulation failed unexpectedly"
-                    : exception.getMessage();
-        } finally {
-            experimentLock.unlock();
+        } catch (DeadlineExceeded ex) {
+            status = "TIMED_OUT";
+            detail = "Experiment deadline exceeded; review recovery before resuming";
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            status = "ABORTED";
+            detail = "Experiment interrupted; no further faults will be injected";
+        } catch (RuntimeException ex) {
+            status = attempted ? "ABORTED" : "FAILED";
+            detail = attempted ? "Safety condition failed after injection; operator recovery review required" : "Safety precondition failed; no fault injected";
         }
-
-        // This schema stores recovery_millis as a nonnegative measurement.
-        // For HTTP simulations the field contains observed request duration,
-        // not Kubernetes replica recovery time. The detail states this explicitly.
-        ExperimentResult result = new ExperimentResult(
-                id, startedAt, Instant.now(), type,
-                "stormops-demo", status, elapsedMillis, detail);
-        repository.save(result);
+        ExperimentResult result = new ExperimentResult(id, started, Instant.now(), type, target, status, elapsed, detail);
+        // Atomic outcome + audit + release. Failure preserves the durable reservation.
+        safety.finish(id, actor, status, attempted && !"RECOVERED".equals(status), () -> repository.save(result));
         return result;
     }
+    private static class DeadlineExceeded extends RuntimeException {}
 }

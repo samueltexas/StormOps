@@ -55,19 +55,21 @@ public class ExperimentController {
 
     @PostMapping("/pod-termination")
     public ExperimentResult terminatePod(
-            @RequestHeader("X-StormOps-Confirmation") String confirmation
+            @RequestHeader("X-StormOps-Confirmation") String confirmation,
+            @RequestParam(defaultValue = "true") boolean dryRun
     ) {
         // Confirmation mitigates accidental execution; it is not authentication.
         if (!CONFIRMATION.equals(confirmation)) {
             throw new IllegalArgumentException("Explicit confirmation is required");
         }
-        return experiments.terminateOnePod();
+        return experiments.terminateOnePod(dryRun);
     }
 
 
     @PostMapping("/http-simulation")
     public ExperimentResult simulateHttp(
             @RequestHeader("X-StormOps-Confirmation") String confirmation,
+            @RequestParam(defaultValue = "true") boolean dryRun,
             @org.springframework.web.bind.annotation.RequestBody HttpSimulationRequest request
     ) {
         if (!HTTP_CONFIRMATION.equals(confirmation)) {
@@ -77,7 +79,7 @@ public class ExperimentController {
             throw new IllegalArgumentException("Experiment type is required");
         }
         return experiments.runHttpSimulation(
-                request.type(), request.latencyMillis() == null ? 0 : request.latencyMillis());
+                request.type(), request.latencyMillis() == null ? 0 : request.latencyMillis(), dryRun);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

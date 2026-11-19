@@ -7,11 +7,11 @@ StormOps intentionally prioritizes an isolated local learning environment and cl
 | Area | Current boundary | Potential next step |
 | --- | --- | --- |
 | Deployment | Local kind cluster | Dedicated deployment architecture and threat model |
-| Security | Opt-in HTTP Basic authentication | Secure-by-default configuration, HTTPS, managed identities |
-| Kubernetes scope | Fixed context, namespace, and demo workload | Explicit allowlists and least-privilege service accounts |
-| Concurrency | Single-process lock | Durable/distributed coordination |
-| Experiment state | Completed-result persistence | Durable state machine with crash recovery |
-| Auditability | Result persistence may fail after an action | Transactional/outbox-style audit strategy |
+| Security | Default-on HTTP Basic authentication | HTTPS and managed identities |
+| Kubernetes scope | Fixed context, namespace, and demo workload | Singleton allowlists and reviewed runner RBAC |
+| Concurrency | Persistent shared-database reservation | Fenced automated crash reconciliation |
+| Experiment state | Durable admission, intent and atomic completion | Automated recovery beyond the offline runbook |
+| Auditability | Intent persists; crash outcome can remain unknown | Transactional/outbox-style audit strategy |
 | Fault catalog | Pod termination and HTTP simulation | Carefully scoped additional experiments |
 | Reliability | Local recovery observation | More robust telemetry and SLO evaluation |
 | Testing | Unit, integration, frontend, and CI checks | Browser E2E, security and resilience testing |
@@ -21,10 +21,10 @@ StormOps intentionally prioritizes an isolated local learning environment and cl
 
 ### P1 — Safety and correctness
 
-- Make secured startup the clearly documented default for all supported launch paths.
+- Maintain secure startup defaults and the explicit dev-only opt-out.
 - Add stronger HTTP-level tests for unauthorized and forbidden requests, including incorrect credentials.
 - Review error handling to prevent leaking infrastructure details.
-- Make experiment state and audit records resilient to process failure.
+- Extend offline recovery toward a fenced worker model.
 
 ### P2 — Developer experience
 
@@ -48,3 +48,5 @@ StormOps intentionally prioritizes an isolated local learning environment and cl
 - Formal security certification or independent penetration-test assurance
 
 This document describes current engineering boundaries and possible future work; roadmap entries are not implemented features.
+
+See [v2 safety and recovery](V2_SAFETY.md) for implemented guardrails and their precise limits.

@@ -1,0 +1,35 @@
+# Apply only after review. Bind a dedicated runner kubeconfig to this identity.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: stormops-runner
+  namespace: stormops-lab
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: stormops-runner
+  namespace: stormops-lab
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["stormops-demo"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: stormops-runner
+  namespace: stormops-lab
+subjects:
+  - kind: ServiceAccount
+    name: stormops-runner
+    namespace: stormops-lab
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: stormops-runner

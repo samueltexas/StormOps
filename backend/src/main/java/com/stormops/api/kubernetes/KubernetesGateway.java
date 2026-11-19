@@ -23,10 +23,19 @@ public class KubernetesGateway {
     private static final String DEPLOYMENT = "stormops-demo";
     private static final String SELECTOR = "app=stormops-demo";
 
-    private final Path kubeconfig = Path.of(
+    private final Path kubeconfig;
+
+    public KubernetesGateway() { this(defaultKubeconfig()); }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public KubernetesGateway(@org.springframework.beans.factory.annotation.Value("${stormops.kubernetes.kubeconfig}") String config) {
+        this.kubeconfig = Path.of(config);
+    }
+
+    private static String defaultKubeconfig() { return Path.of(
             System.getProperty("user.home"),
-            "Projects", "StormOps", ".kube", "stormops-config"
-    );
+            "Projects", "StormOps", ".kube", "stormops-runner-config"
+    ).toString(); }
 
     public int desiredReplicas() {
         return Integer.parseInt(run("get", "deployment", DEPLOYMENT,
@@ -40,20 +49,36 @@ public class KubernetesGateway {
     }
 
     public List<String> runningPods() {
-        String output = run("get", "pods", "-l", SELECTOR,
-                "--field-selector=status.phase=Running",
-                "-o", "jsonpath={range .items[*]}{.metadata.name}{'\\n'}{end}");
+        String output = run("get", "pods", "-l", SELECTOR, "-o", "json");
+        return eligiblePods(output);
+    }
 
-        return output.lines()
-                .map(String::trim)
-                .filter(name -> name.startsWith(DEPLOYMENT + "-"))
-                .filter(name -> !name.isBlank())
-                .sorted()
-                .toList();
+    static List<String> eligiblePods(String json) {
+        var root = tools.jackson.databind.json.JsonMapper.builder().build().readTree(json);
+        List<String> names = new ArrayList<>();
+        for (var pod : root.path("items")) {
+            var metadata = pod.path("metadata");
+            String name = metadata.path("name").asText();
+            boolean ready = false;
+            for (var condition : pod.path("status").path("conditions")) {
+                if ("Ready".equals(condition.path("type").asText()) && "True".equals(condition.path("status").asText())) ready = true;
+            }
+            boolean managed = false;
+            for (var owner : metadata.path("ownerReferences")) {
+                if (owner.path("controller").asBoolean() && "ReplicaSet".equals(owner.path("kind").asText())
+                        && owner.path("name").asText().startsWith(DEPLOYMENT + "-")) managed = true;
+            }
+            if (NAMESPACE.equals(metadata.path("namespace").asText())
+                    && "stormops-demo".equals(metadata.path("labels").path("app").asText())
+                    && name.matches("stormops-demo-[a-z0-9-]+")
+                    && !metadata.hasNonNull("deletionTimestamp") && managed && ready
+                    && "Running".equals(pod.path("status").path("phase").asText())) names.add(name);
+        }
+        return names.stream().sorted().toList();
     }
 
     public boolean podExists(String podName) {
-        return runningPods().contains(podName);
+        return !run("get", "pod", podName, "--ignore-not-found", "-o", "name").isBlank();
     }
 
     public void deletePod(String podName) {
@@ -61,28 +86,40 @@ public class KubernetesGateway {
             throw new IllegalArgumentException("Invalid lab pod name");
         }
 
-        if (!podExists(podName)) {
-            throw new IllegalStateException("Selected pod is no longer running");
+        String snapshot = run("get", "pod", podName, "-o", "json");
+        if (!eligiblePods("{\"items\":[" + snapshot + "]}").contains(podName)) {
+            throw new IllegalStateException("Selected pod is no longer eligible");
         }
-
-        run("delete", "pod", podName, "--wait=false");
+        String uid = tools.jackson.databind.json.JsonMapper.builder().build().readTree(snapshot)
+                .path("metadata").path("uid").asText();
+        if (!uid.matches("[a-f0-9-]{36}")) throw new IllegalStateException("Invalid pod identity");
+        // UID preconditions prevent deleting a replacement that reuses the selected name.
+        String options = "{\"apiVersion\":\"v1\",\"kind\":\"DeleteOptions\",\"preconditions\":{\"uid\":\"" + uid + "\"}}";
+        runWithInput(options, "delete", "--raw", "/api/v1/namespaces/" + NAMESPACE + "/pods/" + podName, "-f", "-");
     }
 
-    private String run(String... arguments) {
+    private String run(String... arguments) { return runWithInput(null, arguments); }
+
+    private String runWithInput(String input, String... arguments) {
         if (!Files.isRegularFile(kubeconfig)) {
             throw new IllegalStateException("StormOps kubeconfig not found");
         }
 
         List<String> command = new ArrayList<>(List.of(
                 "kubectl", "--kubeconfig", kubeconfig.toString(),
-                "--context", CONTEXT, "--namespace", NAMESPACE
+                "--context", CONTEXT, "--namespace", NAMESPACE, "--request-timeout=10s"
         ));
         command.addAll(List.of(arguments));
 
+        Process process = null;
         try {
-            Process process = new ProcessBuilder(command)
+            process = new ProcessBuilder(command)
                     .redirectErrorStream(true)
                     .start();
+
+            try (var stdin = process.getOutputStream()) {
+                if (input != null) stdin.write(input.getBytes(StandardCharsets.UTF_8));
+            }
 
             // Bound subprocess execution to prevent a stalled Kubernetes API
             // from indefinitely blocking the experiment worker.
@@ -98,8 +135,7 @@ public class KubernetesGateway {
                     StandardCharsets.UTF_8);
 
             if (process.exitValue() != 0) {
-                throw new IllegalStateException("Kubernetes operation failed: "
-                        + output.strip());
+                throw new IllegalStateException("Kubernetes operation failed");
             }
 
             return output;
@@ -108,6 +144,8 @@ public class KubernetesGateway {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Kubernetes operation interrupted", exception);
+        } finally {
+            if (process != null && process.isAlive()) process.destroyForcibly();
         }
     }
 }

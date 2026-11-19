@@ -47,6 +47,12 @@ class ReliabilityControllerTest {
         assertEquals("UNSUPPORTED", ((Map<?, ?>) evaluations.get(3)).get("verdict"));
     }
 
+    @Test void dryRunDoesNotCountAsReliabilityFailure() {
+        var report = controllerWith(List.of(record("POD_TERMINATION", "DRY_RUN", -1))).report(20000, 800);
+        assertEquals(0L, report.get("failed"));
+        assertEquals(1L, report.get("unsupported"));
+        assertNull(report.get("passRatePercent"));
+    }
     @Test void emptyHistoryHasNoMisleadingPassRate() {
         var report = controllerWith(List.of()).report(20000, 800);
         assertEquals(0, report.get("total"));

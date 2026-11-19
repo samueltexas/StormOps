@@ -57,10 +57,10 @@ public class ReliabilityController {
                 default -> null;
             };
             String verdict;
-            if (threshold == null) {
+            if (threshold == null || "DRY_RUN".equals(status)) {
                 verdict = "UNSUPPORTED";
                 unsupported++;
-            } else if ("RECOVERED".equals(status) && duration <= threshold) {
+            } else if ("RECOVERED".equals(status) && duration >= 0 && duration <= threshold) {
                 verdict = "PASSED";
                 passed++;
             } else {

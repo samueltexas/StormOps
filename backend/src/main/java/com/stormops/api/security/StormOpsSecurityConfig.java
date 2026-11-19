@@ -13,9 +13,18 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 
-/** Local-only role-based authentication. Enable only after frontend login is integrated. */
+/** Secure-by-default local role-based authentication. */
 @Configuration
 public class StormOpsSecurityConfig {
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.core.env.Environment environment = new org.springframework.core.env.StandardEnvironment();
+
+    void validateMode(boolean enabled) {
+        if (!enabled && !environment.acceptsProfiles(org.springframework.core.env.Profiles.of("dev"))) {
+            throw new IllegalStateException("Disabling authentication requires the explicit dev profile");
+        }
+    }
+
     @Bean
     PasswordEncoder stormOpsPasswordEncoder() {
         return new BCryptPasswordEncoder();
@@ -27,8 +36,9 @@ public class StormOpsSecurityConfig {
             @Value("${stormops.security.admin.password:}") String adminPassword,
             @Value("${stormops.security.viewer.username:viewer}") String viewerUsername,
             @Value("${stormops.security.viewer.password:}") String viewerPassword,
-            @Value("${stormops.security.enabled:false}") boolean enabled,
+            @Value("${stormops.security.enabled:true}") boolean enabled,
             PasswordEncoder encoder) {
+        validateMode(enabled);
         if (!enabled) return new InMemoryUserDetailsManager();
         if (adminPassword.isBlank() || viewerPassword.isBlank()) {
             throw new IllegalStateException("Security enabled but admin/viewer passwords are missing");
@@ -44,8 +54,12 @@ public class StormOpsSecurityConfig {
     @Bean
     SecurityFilterChain stormOpsSecurityFilterChain(
             HttpSecurity http,
-            @Value("${stormops.security.enabled:false}") boolean enabled) throws Exception {
-        // This API uses stateless HTTP Basic, not cookie authentication. Browser login follows in Phase 10C.
+            @Value("${stormops.security.enabled:true}") boolean enabled) throws Exception {
+        validateMode(enabled);
+        http.sessionManagement(session -> session.sessionCreationPolicy(
+                org.springframework.security.config.http.SessionCreationPolicy.STATELESS));
+        http.requestCache(cache -> cache.disable());
+        // Mutations require a non-simple confirmation header; CORS is not enabled.
         http.csrf(csrf -> csrf.disable());
         http.headers(headers -> headers.cacheControl(Customizer.withDefaults()));
         if (!enabled) {
@@ -54,8 +68,8 @@ public class StormOpsSecurityConfig {
         } else {
             http.authorizeHttpRequests(auth -> auth
                     .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/v1/experiments/pod-termination", "/api/v1/experiments/http-simulation").hasRole("ADMIN")
-                    .requestMatchers("/api/v1/**").hasAnyRole("ADMIN", "VIEWER")
+                    .requestMatchers(HttpMethod.GET, "/api/v1/**").hasAnyRole("ADMIN", "VIEWER")
+                    .requestMatchers("/api/v1/**").hasRole("ADMIN")
                     .anyRequest().denyAll());
             http.httpBasic(Customizer.withDefaults());
         }

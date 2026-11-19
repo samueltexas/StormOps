@@ -34,7 +34,7 @@ See `docs/architecture/ARCHITECTURE.md` for detailed system design.
 1. **Safety scope:** hard-coded local Kubernetes context, namespace, and workload prevent casual use against arbitrary clusters.
 2. **Operational guardrails:** healthy replica checks and bounded recovery observation before/after pod termination.
 3. **Persistence:** Flyway migrations and parameterized JDBC queries for experiment history.
-4. **Security:** role-based authorization and explicit confirmations, with documented limitations of HTTP Basic and opt-in security.
+4. **Security:** role-based authorization and explicit confirmations, with documented limitations of HTTP Basic and the explicit dev-only security opt-out.
 5. **Test isolation:** Testcontainers-backed PostgreSQL integration tests and non-destructive authorization checks.
 6. **Tradeoffs:** in-process locking and completed-result persistence simplify the local prototype but are not sufficient for distributed production control.
 

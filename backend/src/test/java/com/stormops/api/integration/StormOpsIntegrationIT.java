@@ -25,7 +25,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
             "server.address=127.0.0.1",
-            "stormops.security.enabled=true",
             "stormops.security.admin.username=admin",
             "stormops.security.admin.password=stormops-integration-admin-only",
             "stormops.security.viewer.username=viewer",
@@ -51,6 +50,51 @@ class StormOpsIntegrationIT {
     @Value("${local.server.port}") int port;
     @Autowired JdbcTemplate jdbc;
     @Autowired ExperimentRepository repository;
+    @Autowired com.stormops.api.persistence.SafetyRepository safety;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
+
+    @Test void concurrentAdmissionHasExactlyOneWinner() throws Exception {
+        safety.stop(false, "integration");
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            java.util.concurrent.Callable<Boolean> attempt = () -> {
+                start.await();
+                try { safety.begin(UUID.randomUUID(), "integration", "BASELINE", false); return true; }
+                catch (IllegalStateException rejected) { return false; }
+            };
+            var first = pool.submit(attempt);
+            var second = pool.submit(attempt);
+            start.countDown();
+            assertNotEquals(first.get(10, java.util.concurrent.TimeUnit.SECONDS), second.get(10, java.util.concurrent.TimeUnit.SECONDS));
+        } finally {
+            jdbc.update("UPDATE safety_control SET active_run=NULL, stopped=TRUE WHERE id=1");
+        }
+    }
+
+
+    @Test void durableReservationSurvivesAnotherRepositoryAndBlocksResume() {
+        safety.stop(false, "integration");
+        UUID id = UUID.randomUUID();
+        try {
+            safety.begin(id, "integration", "BASELINE", false);
+            var restarted = new com.stormops.api.persistence.SafetyRepository(new JdbcTemplate(jdbc.getDataSource()), transactions);
+            assertThrows(IllegalStateException.class, () -> restarted.begin(UUID.randomUUID(), "integration", "BASELINE", false));
+            safety.stop(true, "integration");
+            assertThrows(IllegalStateException.class, () -> safety.checkpoint(id, false));
+            assertThrows(IllegalStateException.class, () -> safety.stop(false, "integration"));
+            assertThrows(IllegalStateException.class, () -> safety.finish(id, "integration", "FAILED", true, () -> { throw new IllegalStateException(); }));
+            assertEquals(id, safety.state().get("active_run"));
+            safety.finish(id, "integration", "ABORTED", true, () -> {});
+            assertEquals(true, safety.state().get("stopped"));
+            assertNull(safety.state().get("active_run"));
+        } finally {
+            jdbc.update("UPDATE safety_control SET active_run=NULL, stopped=TRUE WHERE id=1");
+        }
+    }
+    @Test void viewerCannotChangeSafetyControls() throws Exception {
+        assertEquals(403, request("POST", "/api/v1/safety/resume", "viewer", "stormops-integration-viewer-only", "RESUME_STORMOPS", null).statusCode());
+    }
+
 
     private HttpResponse<String> request(String method, String path, String user, String password,
                                          String confirmation, String body) throws Exception {

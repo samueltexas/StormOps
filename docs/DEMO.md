@@ -59,3 +59,7 @@ A full-stack engineering project that provides controlled Kubernetes pod termina
 ## Evidence over claims
 
 Only demonstrate features that work in the checked-out version. Avoid describing the platform as production-ready, multi-cluster, highly available, or externally audited.
+
+## v2 safety behavior
+
+The current frontend defaults to dry-run through the API. Use the [v2 operator guide](V2_SAFETY.md) for explicitly authorized live experiments; the initial persistent stop must be reviewed before resuming. No UI-based live-execution workflow is claimed for this increment.

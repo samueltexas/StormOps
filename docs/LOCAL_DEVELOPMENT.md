@@ -2,7 +2,7 @@
 
 ## Purpose
 
-StormOps is designed to run locally with no mandatory recurring cloud-hosting cost. It combines a Spring Boot backend, React/TypeScript frontend, PostgreSQL, a dedicated kind Kubernetes cluster, and optional Prometheus/Grafana monitoring.
+StormOps is designed to run locally with no mandatory recurring cloud-hosting cost. It combines a Spring Boot backend, React/TypeScript frontend, PostgreSQL, a dedicated kind Kubernetes cluster, and Prometheus safety monitoring and optional Grafana dashboards.
 
 ## Prerequisites
 
@@ -66,7 +66,7 @@ These are development conventions, not public deployment URLs. Verify actual bin
 
 - Use only the dedicated `kind-stormops-local` context and `stormops-lab` namespace.
 - Never point the application at a production cluster.
-- Keep `.kube/stormops-config` and `.secrets/` out of Git.
+- Keep `.kube/` and `.secrets/` out of Git. The v2 runner requires a dedicated `.kube/stormops-runner-config` identity; see [v2 safety](V2_SAFETY.md).
 - Check that credentials are loaded and security is enabled before opening the UI.
 - Run pod termination only when you intend to disrupt the local demo workload.
 - Do not publish localhost services through tunneling or port forwarding to the Internet.
@@ -82,3 +82,7 @@ These are development conventions, not public deployment URLs. Verify actual bin
 ## Cleanup
 
 Consult the project's setup scripts before deleting clusters, containers, or volumes. PostgreSQL volumes can contain experiment history. Do not run destructive cleanup commands without backing up data you intend to retain.
+
+## v2 startup changes
+
+Security is enabled by default. The initial kill switch is engaged, and experiment endpoints default to dry-run. Prometheus must be reachable on loopback port 19090 with healthy, fresh metrics and real traffic. Follow [the v2 safety guide](V2_SAFETY.md) before explicitly enabling live injection.

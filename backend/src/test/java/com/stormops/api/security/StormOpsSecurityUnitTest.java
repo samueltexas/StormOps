@@ -10,6 +10,17 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.server.ResponseStatusException;
 
 class StormOpsSecurityUnitTest {
+    @Test void disablingSecurityOutsideDevFailsClosed() {
+        assertThrows(IllegalStateException.class, () -> new StormOpsSecurityConfig().validateMode(false));
+    }
+    @Test void explicitDevAllowsOptOut() {
+        var config = new StormOpsSecurityConfig();
+        var environment = new org.springframework.mock.env.MockEnvironment();
+        environment.setActiveProfiles("dev");
+        org.springframework.test.util.ReflectionTestUtils.setField(config, "environment", environment);
+        assertDoesNotThrow(() -> config.validateMode(false));
+    }
+
     @Test void configuredUsersHaveDistinctRolesAndEncodedPasswords() {
         var config = new StormOpsSecurityConfig();
         var encoder = new BCryptPasswordEncoder();

@@ -65,3 +65,11 @@ The workflow runs backend unit tests, backend integration tests, and frontend te
 ## Current coverage gaps
 
 The project does not claim exhaustive browser E2E coverage, penetration testing, failure-injection testing against arbitrary Kubernetes clusters, or distributed-lock correctness. Expand test coverage before supporting multi-instance deployments or untrusted users.
+
+## v2 safety regression suite
+
+Run `./mvnw --offline --batch-mode --no-transfer-progress -Pintegration-tests verify` from `backend` when dependencies are cached. Testcontainers uses a disposable PostgreSQL database and never the local StormOps database. Unit tests mock external fault operations. Coverage includes concurrent admission, retained reservations after failed completion, fresh telemetry, fixed pod eligibility, dry-run, stop checks and default HTTP authentication. No Kubernetes experiment is run by this suite.
+
+## Real Kubernetes E2E
+
+The CI kind job intentionally runs a real fault against its own disposable cluster. This is separate from the mock-based unit and Testcontainers integration suites. See [CI and delivery](CI_DELIVERY.md) for the exact assertions, local invocation and cleanup boundary.

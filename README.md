@@ -102,7 +102,7 @@ The application is designed for a local Kubernetes laboratory. Review the script
 
 The backend's default configuration binds to `127.0.0.1:18080`. The local database configuration expects PostgreSQL on `127.0.0.1:15432`. These defaults are intended for local development, not public exposure.
 
-> **Security note:** Authentication is opt-in in the current backend configuration (`STORMOPS_SECURITY_ENABLED`). Enable and configure it before exposing the API beyond a trusted local environment. The current configuration should not be treated as production hardened.
+> **v2.0 safety:** Authentication is enabled by default; missing credentials prevent startup. Disabling it requires both the explicit `dev` profile and `STORMOPS_SECURITY_ENABLED=false`. Experiments default to dry-run and the durable kill switch starts engaged. Read the [v2 safety and recovery guide](docs/V2_SAFETY.md) before operating. This remains a local laboratory, not a production-hardened service.
 
 ## Continuous integration
 
@@ -131,7 +131,7 @@ The initial public workflow run completed successfully: [run #42836614444](https
 
 ## License
 
-No open-source license has been selected yet. All rights are reserved unless a license is added to this repository.
+Licensed under the [MIT License](LICENSE). Copyright (c) 2026 Samuel Texa.
 
 <!-- STORMOPS_SCREENSHOTS_START -->
 ## Product screenshots
@@ -168,3 +168,7 @@ Real monitoring of the local StormOps Kubernetes demo service, including service
 
 > Local lab screenshot; monitoring access requires the local Kubernetes cluster and port-forwarding.
 <!-- STORMOPS_GRAFANA_END -->
+
+## v2 verification and delivery
+
+Java 21 bytecode is explicit and CI tests JDK 21 and 25. A disposable kind E2E job verifies restricted ServiceAccount permissions, performs one real pod termination through the authenticated API, and checks replacement, steady state and durable audit. Version-tag publishing to GHCR is gated on the complete suite; it never deploys automatically. See [CI and container delivery](docs/CI_DELIVERY.md) for credential provisioning, evidence and release steps. Workflow configuration alone does not mean images have already been published.

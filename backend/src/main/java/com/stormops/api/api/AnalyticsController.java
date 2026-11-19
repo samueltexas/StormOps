@@ -23,7 +23,7 @@ public class AnalyticsController {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("total", jdbc.queryForObject("SELECT COUNT(*) FROM experiments", Long.class));
         result.put("passed", jdbc.queryForObject("SELECT COUNT(*) FROM experiments WHERE status = 'RECOVERED'", Long.class));
-        result.put("failed", jdbc.queryForObject("SELECT COUNT(*) FROM experiments WHERE status = 'FAILED'", Long.class));
+        result.put("failed", jdbc.queryForObject("SELECT COUNT(*) FROM experiments WHERE status IN ('FAILED', 'ABORTED', 'TIMED_OUT', 'INTERRUPTED')", Long.class));
         result.put("podRecoveryAvgMillis", jdbc.queryForObject("""
                 SELECT ROUND(AVG(recovery_millis))::bigint FROM experiments
                 WHERE experiment_type = 'POD_TERMINATION' AND status = 'RECOVERED'
@@ -36,8 +36,8 @@ public class AnalyticsController {
         result.put("byType", jdbc.query("""
                 SELECT experiment_type, COUNT(*) AS total,
                        COUNT(*) FILTER (WHERE status = 'RECOVERED') AS passed,
-                       COUNT(*) FILTER (WHERE status = 'FAILED') AS failed,
-                       ROUND(AVG(recovery_millis))::bigint AS avg_millis
+                       COUNT(*) FILTER (WHERE status IN ('FAILED', 'ABORTED', 'TIMED_OUT', 'INTERRUPTED')) AS failed,
+                       ROUND(AVG(recovery_millis) FILTER (WHERE status = 'RECOVERED' AND recovery_millis >= 0))::bigint AS avg_millis
                 FROM experiments GROUP BY experiment_type ORDER BY experiment_type
                 """, (rs, i) -> Map.of(
                     "type", rs.getString("experiment_type"),

@@ -117,7 +117,7 @@ The first published run completed successfully: [StormOps CI run 42836614444](ht
 
 ## Architectural decisions and next steps
 
-See [ADR 0002](architecture/decisions/0002-local-chaos-control-plane.md) for the local Kubernetes control-plane boundaries and [ADR 0003](architecture/decisions/0003-postgresql-experiment-history.md) for persistence tradeoffs. Some historical statements in these ADRs describe earlier phases (for example, in-memory history and no authentication); the current implementation has since added persistence and opt-in local authentication.
+See [ADR 0002](architecture/decisions/0002-local-chaos-control-plane.md) for the local Kubernetes control-plane boundaries and [ADR 0003](architecture/decisions/0003-postgresql-experiment-history.md) for persistence tradeoffs. Some historical statements in these ADRs describe earlier phases (for example, in-memory history and no authentication); the current implementation has since added persistence and default-on local authentication.
 
 Future production-hardening work would include a scoped Kubernetes service identity, enforced authentication, durable experiment lifecycle state, distributed locking, reliable audit logging, and externally meaningful availability/SLO measurements. These are **future improvements**, not claims of current functionality.
 

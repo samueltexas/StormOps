@@ -6,7 +6,7 @@ StormOps is a **local-first chaos engineering laboratory**, not a production-har
 
 ## Authentication and authorization
 
-The backend uses Spring Security with HTTP Basic authentication when `STORMOPS_SECURITY_ENABLED=true`. Local users are configured with environment variables; passwords are encoded using BCrypt in the in-memory user store. The application supports `ADMIN` and `VIEWER` roles.
+The backend uses Spring Security with HTTP Basic authentication by default. Local users are configured with environment variables; passwords are encoded using BCrypt in the in-memory user store. The application supports `ADMIN` and `VIEWER` roles.
 
 | Action | ADMIN | VIEWER | Unauthenticated (security enabled) |
 | --- | --- | --- | --- |
@@ -19,7 +19,7 @@ The two experiment endpoints require an `X-StormOps-Confirmation` header with a 
 
 ### Important default
 
-The current application property defaults `STORMOPS_SECURITY_ENABLED` to `false`. When disabled, the security filter permits requests without authentication. The intended secured local startup loads `.secrets/stormops-security.env` through `scripts/run-api-phase10d.sh`; verify the enabled flag before starting the service. Do not assume that invoking Maven or another startup script automatically enables authentication.
+Authentication defaults to enabled and missing passwords prevent startup. Disabling it requires both the `dev` profile and `STORMOPS_SECURITY_ENABLED=false`; all other profiles reject the opt-out. See [v2 safety](V2_SAFETY.md) for durable admission, audit, kill switch and offline crash recovery.
 
 ## Credential handling
 
@@ -42,12 +42,12 @@ The backend currently disables CSRF protection for its HTTP Basic API. Reassess 
 
 ## Known limitations
 
-- Security is opt-in by default; alternate startup paths may leave endpoints unauthenticated.
+- An explicit insecure dev opt-out remains available for isolated development.
 - Credentials are managed as local environment variables and in-memory users; there is no external identity provider or centralized secret manager.
 - HTTP Basic does not provide token revocation or a full session-management system.
-- Local-process locking is not a distributed concurrency control.
-- Experiment history does not establish a durable `RUNNING` state across process crashes.
-- A failure to persist an experiment result after an action may leave an incomplete audit trail.
+- Concurrency is limited by a durable singleton in the shared PostgreSQL database; independent databases do not coordinate.
+- Interrupted runs retain their durable reservation and require offline operator reconciliation.
+- An external action cannot be atomic with a database commit; persisted intent can have an unknown outcome. Failed completion preserves the reservation.
 - The project has not undergone an independent penetration test or production security assessment.
 
 ## Security testing
