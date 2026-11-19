@@ -3,6 +3,8 @@
 import base64
 import json
 import os
+import platform
+import re
 from pathlib import Path
 import secrets
 import shutil
@@ -46,12 +48,26 @@ def free_port(port=0):
 
 
 def main():
-    for command in ("kind", "kubectl", "docker", "java"):
+    release_api = os.environ.get("STORMOPS_E2E_API_IMAGE", "")
+    release_demo = os.environ.get("STORMOPS_E2E_DEMO_IMAGE", "")
+    release_mode = bool(release_api or release_demo)
+    if release_mode:
+        # Both release artifacts are required and must be pinned by registry digest.
+        for name, image in (("api", release_api), ("demo", release_demo)):
+            pattern = rf"ghcr\.io/samueltexas/stormops-{name}@sha256:[0-9a-f]{{64}}"
+            if not re.fullmatch(pattern, image):
+                raise RuntimeError(f"Invalid or unpinned release {name} image")
+        # Host networking is required for the API's fixed loopback endpoints.
+        if platform.system() != "Linux" or platform.machine() not in ("x86_64", "amd64"):
+            raise RuntimeError("Published-image E2E requires Linux amd64, not Docker Desktop on macOS")
+    commands = ("kind", "kubectl", "docker") if release_mode else ("kind", "kubectl", "docker", "java")
+    for command in commands:
         if not shutil.which(command):
             raise RuntimeError(f"Required executable missing: {command}")
-    for artifact in (ROOT / "backend/target/stormops-api.jar", ROOT / "demo-services/sample-java-service/target/stormops-demo.jar"):
-        if not artifact.is_file():
-            raise RuntimeError(f"Build the current Maven package first: {artifact.name}")
+    if not release_mode:
+        for artifact in (ROOT / "backend/target/stormops-api.jar", ROOT / "demo-services/sample-java-service/target/stormops-demo.jar"):
+            if not artifact.is_file():
+                raise RuntimeError(f"Build the current Maven package first: {artifact.name}")
     # Refuse to replace an existing local tunnel or service.
     free_port(18081)
     free_port(19090)
@@ -59,9 +75,10 @@ def main():
     EVIDENCE.mkdir(parents=True, exist_ok=True)
     suffix = uuid.uuid4().hex[:12]
     cluster = "stormops-e2e-" + suffix
-    demo_image = "stormops/sample-java-service:e2e-" + suffix
+    demo_image = ("stormops/release-demo:e2e-" if release_mode else "stormops/sample-java-service:e2e-") + suffix
     db_name = "stormops-e2e-db-" + suffix
     processes = []
+    api_containers = []
     cluster_owned = False
     db_owned = False
     image_owned = False
@@ -116,18 +133,35 @@ def main():
             log = temp / f"backend-{len(logs)}.log"
             logs.append(log)
             env = dict(os.environ)
-            # Do not inherit a local profile or security overrides.
+            # Do not inherit local credentials, profiles or security overrides.
             for key in list(env):
                 if key.startswith(("SPRING_", "STORMOPS_", "SERVER_", "JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS")):
                     env.pop(key)
             env.update(STORMOPS_DB_URL=f"jdbc:postgresql://127.0.0.1:{db_port}/stormops",
                        STORMOPS_DB_USER="stormops", STORMOPS_DB_PASSWORD=db_password,
                        STORMOPS_ADMIN_PASSWORD=password, STORMOPS_VIEWER_PASSWORD=viewer_password,
-                       STORMOPS_KUBECONFIG=str(runner), SERVER_PORT=str(api_port))
+                       STORMOPS_KUBECONFIG="/run/stormops-runner.json" if release_mode else str(runner),
+                       SERVER_PORT=str(api_port))
+            if release_mode:
+                container_name = f"stormops-e2e-api-{suffix}-{len(logs)}"
+                command = [
+                    "docker", "run", "--rm", "--network", "host", "--name", container_name,
+                    "--user", f"{os.getuid()}:{os.getgid()}",
+                    "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+                    "--mount", f"type=bind,source={runner},target=/run/stormops-runner.json,readonly",
+                    "-e", "STORMOPS_DB_URL", "-e", "STORMOPS_DB_USER",
+                    "-e", "STORMOPS_DB_PASSWORD", "-e", "STORMOPS_ADMIN_PASSWORD",
+                    "-e", "STORMOPS_VIEWER_PASSWORD", "-e", "STORMOPS_KUBECONFIG",
+                    "-e", "SERVER_PORT", release_api,
+                ]
+            else:
+                command = ["java", "-jar", str(jar)]
             with log.open("w") as output:
-                process = subprocess.Popen(["java", "-jar", str(jar)], stdout=output,
+                process = subprocess.Popen(command, stdout=output,
                                            stderr=subprocess.STDOUT, env=env, start_new_session=True)
             processes.append(process)
+            if release_mode:
+                api_containers.append(container_name)
             def ready():
                 if process.poll() is not None:
                     raise RuntimeError("Backend exited before becoming healthy")
@@ -192,7 +226,14 @@ nodes:
             save("rbac.json", {"identity": identity, "checks": checks})
             print("Dedicated identity and least-privilege assertions passed", flush=True)
 
-            run("docker", "build", "-t", demo_image, str(ROOT / "demo-services/sample-java-service"), timeout=600)
+            if release_mode:
+                # A unique local tag preserves the verified bytes while avoiding
+                # containerd digest-import ambiguity with imagePullPolicy=Never.
+                run("docker", "pull", "--platform", "linux/amd64", release_api, timeout=600)
+                run("docker", "pull", "--platform", "linux/amd64", release_demo, timeout=600)
+                run("docker", "tag", release_demo, demo_image)
+            else:
+                run("docker", "build", "-t", demo_image, str(ROOT / "demo-services/sample-java-service"), timeout=600)
             image_owned = True
             run("kind", "load", "docker-image", demo_image, "--name", cluster, timeout=180)
             manifest = (ROOT / "infrastructure/kubernetes/demo-service.yaml").read_text().replace("stormops/sample-java-service:local", demo_image)
@@ -250,7 +291,10 @@ nodes:
             assert {"STARTED", "PRECHECK_PASSED", "INJECTION_INTENT", "POSTCHECK_PASSED", "RECOVERED"} <= {event["event"] for event in events}
             assert all(event["actor"] == "admin" for event in events)
             assert request("/api/v1/safety")[1]["active_run"] is None
-            api.terminate()
+            if release_mode:
+                run("docker", "stop", "--time", "10", api_containers[-1], timeout=35)
+            else:
+                api.terminate()
             api.wait(timeout=20)
             launch_api()
             assert request("/api/v1/experiments/" + result["id"])[1]["status"] == "RECOVERED"
@@ -269,6 +313,9 @@ nodes:
                     except subprocess.TimeoutExpired:
                         os.killpg(process.pid, signal.SIGKILL)
                         process.wait()
+            # Stop only uniquely named API containers created by this E2E run.
+            for name in reversed(api_containers):
+                subprocess.run(["docker", "rm", "-f", name], capture_output=True, text=True, timeout=45)
             for log in logs:
                 content = log.read_text()
                 for secret in (password, viewer_password, db_password, token):
