@@ -107,6 +107,26 @@ python3 scripts/stormops.py status --json
 
 To start the secured API or React UI deliberately, use `python3 scripts/stormops.py start-api` or `python3 scripts/stormops.py start-ui`. These reuse existing launchers and never run legacy installers. Review [local operations](docs/LOCAL_OPERATIONS.md) for safety checks and limitations.
 
+## V3 Milestone 3 — Operational failure testing
+
+**Verified in isolated laboratory environments (November 2026).** StormOps exercises failure
+conditions around experiment admission, Prometheus availability, Kubernetes runner
+credentials, PostgreSQL outages, API JVM crashes, backup/restore, and client-side
+TCP partitions. Regression tests verify that ambiguous injection intents retain
+their durable reservations, rather than automatically restarting or unlocking
+experiments.
+
+The reviewed V3 Milestone 3 suite passed 33 Java unit tests and 15 PostgreSQL
+integration tests locally. The final increment also passed Java 21/25 CI,
+frontend, runtime image and disposable kind checks. These scenarios use mocked
+external calls, synthetic intents, dedicated Testcontainers resources or an
+independently owned CI kind cluster. The test suite is **not** a production
+disaster-recovery or distributed-safety certification.
+
+- [Operational failure matrix and acceptance](docs/V3_OPERATIONAL_FAILURE_TESTING.md)
+- [Reproducible recovery evidence and limitations](docs/V3_RECOVERY_EVIDENCE.md)
+- [Testing and CI instructions](docs/TESTING.md)
+
 ## Local environment
 
 The application is designed for a local Kubernetes laboratory. Review the scripts in `scripts/` and manifests in `infrastructure/` before running them. Database connection settings and authentication credentials are supplied through environment variables; **do not commit local secrets or Kubernetes credentials**.
@@ -126,6 +146,8 @@ The initial public workflow run completed successfully: [run #42836614444](https
 - [Local chaos control-plane decision](docs/architecture/decisions/0002-local-chaos-control-plane.md)
 - [PostgreSQL experiment-history decision](docs/architecture/decisions/0003-postgresql-experiment-history.md)
 - [Phase 4 notes](docs/PHASE4.md)
+- [V3 operational failure testing](docs/V3_OPERATIONAL_FAILURE_TESTING.md)
+- [V3 recovery evidence and limitations](docs/V3_RECOVERY_EVIDENCE.md)
 
 ## Project status
 
