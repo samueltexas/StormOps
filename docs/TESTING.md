@@ -77,6 +77,13 @@ modified by the new tests.
 
 Run `./mvnw --offline --batch-mode --no-transfer-progress -Pintegration-tests verify` from `backend` when dependencies are cached. Testcontainers uses a disposable PostgreSQL database and never the local StormOps database. Unit tests mock external fault operations. Coverage includes concurrent admission, retained reservations after failed completion, fresh telemetry, fixed pod eligibility, dry-run, stop checks and default HTTP authentication. No Kubernetes experiment is run by this suite.
 
+## V3 evidence and network-partition regression
+
+The integration profile now also tests PostgreSQL TCP availability with an isolated
+Toxiproxy container and Testcontainers network. For a reviewed failure matrix,
+reproduction commands and recovery limits, see
+[V3 recovery evidence](V3_RECOVERY_EVIDENCE.md).
+
 ## Real Kubernetes E2E
 
 The CI kind job intentionally runs a real fault against its own disposable cluster. This is separate from the mock-based unit and Testcontainers integration suites. See [CI and delivery](CI_DELIVERY.md) for the exact assertions, local invocation and cleanup boundary.

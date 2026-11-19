@@ -40,6 +40,7 @@ PostgreSQL volume. Do not run an API-kill test against a live experiment.
 | API process lost with outstanding INJECTION_INTENT | Active UUID survives repository reinitialization; new admission and resume are blocked; intent audit persists | Testcontainers integration |
 | PostgreSQL paused after admission | A new admission fails while unavailable; persisted intent and active reservation survive restoration; resume remains blocked | Disposable PostgreSQL/Testcontainers outage integration |
 | Backup/restore of audit and experiment history | Restore must preserve completed history, active run ownership, stopped state, audit rows and sequence continuity | Disposable PostgreSQL backup/restore integration test |
+| Database network partition during a reserved run | A healthy database remains unreachable through the client path; attempted admission fails, and a recovered connection still refuses reinjection/resume | Toxiproxy + disposable PostgreSQL integration (pending validation) |
 
 ## Recovery decision
 
@@ -112,18 +113,37 @@ not successful remediation of an injected fault.
       Flyway schema history and BIGSERIAL continuity after restoration.
 - [x] Assert restored ambiguous intent remains unfinished, and admission/resume
       continue to fail closed.
-- [ ] Confirm Java 21/25 CI and local integration tests.
-- [ ] Review results and integrate this pull request.
+- [x] Confirm Java 21/25 CI and local integration tests.
+- [x] Review results and integrate PR #6.
 
 The archive contains synthetic records only and stays within the test process.
 It is not a backup of the established StormOps database and does not restore
 any existing Docker volume, API service or Kubernetes object.
 
+### Increment 3.5 — Isolated TCP partition and recovery evidence
+
+- [x] Add a Testcontainers network with an exclusive PostgreSQL target and
+      a Toxiproxy client path (no host networking changes).
+- [x] Confirm the database process stays healthy while the proxy prevents
+      client requests, including any new admission.
+- [x] Verify connection restoration does not clear the active run, invent a
+      terminal result or enable a new injection/resume.
+- [x] Add a non-secret evidence inventory and manual decision runbook.
+- [ ] Confirm Java 21/25 CI and local integration tests.
+- [ ] Review the evidence and integrate the PR.
+
+This test simulates a TCP partition between an application client and an
+exclusively test-owned PostgreSQL instance. It does not alter local Docker
+networks, firewall settings, kubeconfig, pods or the established database.
+
+See [V3 recovery evidence and limitations](V3_RECOVERY_EVIDENCE.md).
+
 ### Remaining Milestone 3 work
 
-- [ ] Add disposable network-partition tests with safe cleanup.
-- [ ] Provide non-secret, reproducible evidence and restoration runbooks.
-- [ ] Prove no automatic unlocking or reinjection in every ambiguous case.
+- [ ] Verify the full CI matrix and local execution for Increment 3.5.
+- [ ] Reconcile the milestone's evidence and limitations with the README.
+- [ ] Review whether more realistic end-to-end outage conditions are required
+      before claiming the milestone complete.
 
 **Non-goals:** production disaster recovery certification, restoring live
 local volumes during development, changing the frontend visual design,
