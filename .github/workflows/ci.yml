@@ -74,6 +74,26 @@ jobs:
       - name: Validate configuration and alert rules with pinned promtool
         run: python3 scripts/ci/validate_monitoring.py
 
+  release-metadata:
+    name: Validate version and release metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify both Maven versions, release notes and MIT license
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from subprocess import run
+          from xml.etree import ElementTree as ET
+
+          pom = ET.parse(Path("backend/pom.xml")).getroot()
+          version = pom.findtext("{http://maven.apache.org/POM/4.0.0}version")
+          if not version:
+              raise SystemExit("Maven release version is missing")
+          run(["python3", "scripts/ci/validate_release.py", "v" + version], check=True)
+          PY
+
   frontend:
     name: Frontend tests and build
     runs-on: ubuntu-latest
@@ -153,7 +173,7 @@ jobs:
       api_digest: ${{ steps.api.outputs.digest }}
       demo_digest: ${{ steps.demo.outputs.digest }}
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && github.repository == 'samueltexas/StormOps'
-    needs: [backend-unit, backend-integration, frontend, kind-e2e, images]
+    needs: [backend-unit, backend-integration, frontend, kind-e2e, images, monitoring-config, release-metadata]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
