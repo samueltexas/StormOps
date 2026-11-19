@@ -215,6 +215,23 @@ class StormOpsIntegrationIT {
         }
     }
 
+    @Test void operationalObservabilityIsReadOnlyAndRequiresAuthentication() throws Exception {
+        assertEquals(401, request("GET", "/api/v1/observability/status",
+                null, null, null, null).statusCode());
+
+        var viewer = request("GET", "/api/v1/observability/status",
+                "viewer", "stormops-integration-viewer-only", null, null);
+        assertEquals(200, viewer.statusCode());
+        assertTrue(viewer.body().contains("\"operationalState\""));
+        assertTrue(viewer.body().contains("\"telemetryState\""));
+        assertTrue(viewer.body().contains("\"interpretation\""));
+
+        // A viewer can inspect evidence but cannot mutate operation state.
+        assertEquals(403, request("POST", "/api/v1/safety/stop",
+                "viewer", "stormops-integration-viewer-only",
+                "STOP_STORMOPS", null).statusCode());
+    }
+
     @Test void analyticsAndReliabilityReturnValidReports() throws Exception {
         var analytics = request("GET", "/api/v1/analytics/summary", "viewer", "stormops-integration-viewer-only", null, null);
         assertEquals(200, analytics.statusCode());

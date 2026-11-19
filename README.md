@@ -127,6 +127,15 @@ disaster-recovery or distributed-safety certification.
 - [Reproducible recovery evidence and limitations](docs/V3_RECOVERY_EVIDENCE.md)
 - [Testing and CI instructions](docs/TESTING.md)
 
+## V3 operational observability
+
+The authenticated read-only endpoint `GET /api/v1/observability/status`
+combines the persisted safety reservation and stop flag with guarded
+Prometheus evidence. It explicitly distinguishes unknown database state,
+unfinished experiments and missing telemetry; it never claims that a workload
+is safe to inject without the full execution prechecks. See the
+[operational observability contract](docs/V3_OPERATIONAL_OBSERVABILITY.md).
+
 ## Local environment
 
 The application is designed for a local Kubernetes laboratory. Review the scripts in `scripts/` and manifests in `infrastructure/` before running them. Database connection settings and authentication credentials are supplied through environment variables; **do not commit local secrets or Kubernetes credentials**.
