@@ -65,6 +65,15 @@ jobs:
         working-directory: backend
         run: ./mvnw --batch-mode --no-transfer-progress -Pintegration-tests verify
 
+  monitoring-config:
+    name: Validate local Prometheus rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate configuration and alert rules with pinned promtool
+        run: python3 scripts/ci/validate_monitoring.py
+
   frontend:
     name: Frontend tests and build
     runs-on: ubuntu-latest
