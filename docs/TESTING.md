@@ -96,6 +96,14 @@ Toxiproxy container and Testcontainers network. For a reviewed failure matrix,
 reproduction commands and recovery limits, see
 [V3 recovery evidence](V3_RECOVERY_EVIDENCE.md).
 
+## V3 operational observability verification
+
+The read-only status endpoint has unit coverage for safe state precedence and
+failed PostgreSQL/Prometheus evidence, plus HTTP integration coverage for
+anonymous and VIEWER access. Consult
+[V3 operational observability](V3_OPERATIONAL_OBSERVABILITY.md) before using its
+status as an operational signal. It does not authorize execution.
+
 ## Real Kubernetes E2E
 
 The CI kind job intentionally runs a real fault against its own disposable cluster. This is separate from the mock-based unit and Testcontainers integration suites. See [CI and delivery](CI_DELIVERY.md) for the exact assertions, local invocation and cleanup boundary.
